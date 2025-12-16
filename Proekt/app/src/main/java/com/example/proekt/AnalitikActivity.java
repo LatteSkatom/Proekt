@@ -7,8 +7,6 @@ import android.widget.Button;
 import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.example.proekt.utils.ActivityTransitionUtils;
-import com.example.proekt.utils.WindowUtils;
 import com.google.android.material.imageview.ShapeableImageView;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -38,7 +36,6 @@ public class AnalitikActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.analitika);
-        WindowUtils.setupTransparentNavigationBar(this);
 
         subCountTv = findViewById(R.id.subCount);
         totalSumTv = findViewById(R.id.totalSum);
@@ -57,20 +54,20 @@ public class AnalitikActivity extends AppCompatActivity {
         addButton.setOnClickListener(v -> {
             Intent intent = new Intent(AnalitikActivity.this, AddActivity.class);
             intent.putExtra("user_id", userId);
-            ActivityTransitionUtils.startActivityWithSlide(this, intent);
+            startActivity(intent);
         });
 
         // Кнопка "Подписки"
         Button subButton = findViewById(R.id.sub_button);
         subButton.setOnClickListener(v -> {
             Intent intent = new Intent(AnalitikActivity.this, MainActivity.class);
-            ActivityTransitionUtils.startActivityWithSlide(this, intent);
+            startActivity(intent);
         });
 
         ShapeableImageView settingsbutton = findViewById(R.id.settingsbutt);
         settingsbutton.setOnClickListener(v -> {
             Intent intent = new Intent(AnalitikActivity.this, Seting_activity.class);
-            ActivityTransitionUtils.startActivityWithSlide(this, intent);
+            startActivity(intent);
         });
 
         // Настройка кнопки переключения периодов (теперь она всегда активна)

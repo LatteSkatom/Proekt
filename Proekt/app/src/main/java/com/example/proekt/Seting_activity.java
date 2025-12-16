@@ -7,9 +7,6 @@ import android.widget.Button;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
-
-import com.example.proekt.utils.ActivityTransitionUtils;
-import com.example.proekt.utils.WindowUtils;
 import com.google.android.material.imageview.ShapeableImageView; // Важно!
 
 public class Seting_activity extends AppCompatActivity {
@@ -27,7 +24,6 @@ public class Seting_activity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.setings);
-        WindowUtils.setupTransparentNavigationBar(this);
 
         // Получаем user_id и статус
         SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
@@ -43,19 +39,19 @@ public class Seting_activity extends AppCompatActivity {
         addButton.setOnClickListener(v -> {
             Intent intent = new Intent(Seting_activity.this, AddActivity.class);
             intent.putExtra("user_id", userId);
-            ActivityTransitionUtils.startActivityWithSlide(this, intent);
+            startActivity(intent);
         });
 
         Button subButton = findViewById(R.id.sub_button);
         subButton.setOnClickListener(v -> {
             Intent intent = new Intent(Seting_activity.this, MainActivity.class);
-            ActivityTransitionUtils.startActivityWithSlide(this, intent);
+            startActivity(intent);
         });
 
         Button analitButton = findViewById(R.id.Analit_button);
         analitButton.setOnClickListener(v -> {
             Intent intent = new Intent(Seting_activity.this, AnalitikActivity.class);
-            ActivityTransitionUtils.startActivityWithSlide(this, intent);
+            startActivity(intent);
         });
 
         // ------------------------------------------
@@ -79,7 +75,8 @@ public class Seting_activity extends AppCompatActivity {
     /** Переход к экрану входа/регистрации */
     private void navigateToLogin() {
         Intent intent = new Intent(Seting_activity.this, LoginActivity.class);
-        ActivityTransitionUtils.startActivityClearStack(this, intent);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
     }
 
     /** Выход из аккаунта авторизованного пользователя */
@@ -97,6 +94,7 @@ public class Seting_activity extends AppCompatActivity {
 
         // 2. Перезапускаем MainActivity.
         Intent intent = new Intent(Seting_activity.this, MainActivity.class);
-        ActivityTransitionUtils.startActivityClearStack(this, intent);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
     }
 }

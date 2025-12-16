@@ -6,8 +6,6 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.example.proekt.utils.ActivityTransitionUtils;
-import com.example.proekt.utils.WindowUtils;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
@@ -19,7 +17,6 @@ public class RegisterActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_register);
-        WindowUtils.setupTransparentNavigationBar(this);
 
         auth = FirebaseAuth.getInstance();
 
@@ -30,12 +27,12 @@ public class RegisterActivity extends AppCompatActivity {
     private void signInAnonymously() {
         FirebaseUser current = auth.getCurrentUser();
         if (current != null) {
-            ActivityTransitionUtils.finishWithSlideBack(this);
+            finish();
             return;
         }
 
         auth.signInAnonymously()
-                .addOnSuccessListener(result -> ActivityTransitionUtils.finishWithSlideBack(this))
+                .addOnSuccessListener(result -> finish())
                 .addOnFailureListener(e -> Toast.makeText(this, "Не удалось войти: " + e.getMessage(), Toast.LENGTH_SHORT).show());
     }
 }
