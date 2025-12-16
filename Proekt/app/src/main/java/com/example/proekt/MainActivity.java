@@ -14,6 +14,12 @@ import android.util.Log;
 import android.widget.Button;
 import android.widget.Toast;
 
+import com.google.firebase.auth.FirebaseUser;
+
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
+
+
 import com.example.proekt.utils.NetworkUtils;
 import com.example.proekt.utils.ActivityTransitionUtils;
 import com.example.proekt.utils.WindowUtils;
@@ -21,6 +27,14 @@ import com.example.proekt.utils.WindowUtils;
 import com.example.proekt.network.ApiService;
 import com.example.proekt.network.RetrofitClient;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.FirebaseFirestoreSettings;
+import com.google.firebase.firestore.FieldValue;
+
+import java.util.HashMap;
+import java.util.Map;
 
 
 import androidx.appcompat.app.AlertDialog;
@@ -75,6 +89,34 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         WindowUtils.setupTransparentNavigationBar(this);
+
+        // =========================
+// FIREBASE INIT (ТЕСТ)
+// =========================
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+
+        FirebaseFirestoreSettings fbSettings =
+                new FirebaseFirestoreSettings.Builder()
+                        .setPersistenceEnabled(true)
+                        .build();
+        db.setFirestoreSettings(fbSettings);
+
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+
+        if (auth.getCurrentUser() == null) {
+            auth.signInAnonymously()
+                    .addOnSuccessListener(result -> {
+                        Log.d("FIREBASE", "Anonymous UID = " + result.getUser().getUid());
+                        ensureUserDocument();
+                    })
+                    .addOnFailureListener(e ->
+                            Log.e("FIREBASE", "Auth error", e));
+        } else {
+            Log.d("FIREBASE", "Already signed in: " + auth.getCurrentUser().getUid());
+            ensureUserDocument();
+        }
+
+
 
         // Recycler
         recyclerView = findViewById(R.id.recyclerView);
@@ -471,4 +513,32 @@ public class MainActivity extends AppCompatActivity {
             Log.w(TAG, "Не найден элемент в очереди при удалении: " + sent);
         }
     }
+
+    private void ensureUserDocument() {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+
+        if (user == null) return;
+
+        String uid = user.getUid();
+        DocumentReference userRef = db.collection("users").document(uid);
+
+        userRef.get().addOnSuccessListener(snapshot -> {
+            if (!snapshot.exists()) {
+                Map<String, Object> userData = new HashMap<>();
+                userData.put("name", "Гость");
+                userData.put("avatarUrl", null);
+                userData.put("createdAt", FieldValue.serverTimestamp());
+
+                userRef.set(userData)
+                        .addOnSuccessListener(v ->
+                                Log.d("FIREBASE", "Пользователь создан"))
+                        .addOnFailureListener(e ->
+                                Log.e("FIREBASE", "Ошибка создания пользователя", e));
+            } else {
+                Log.d("FIREBASE", "Пользователь уже существует");
+            }
+        });
+    }
+
 }
