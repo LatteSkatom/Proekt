@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-import java.util.Collections;
 import java.util.Locale;
 
 /**
@@ -196,8 +195,6 @@ public class MainActivity extends AppCompatActivity {
                 long triggerTime = calendar.getTimeInMillis();
                 long now = System.currentTimeMillis();
                 if (triggerTime <= now) continue;
-
-                cancelNotifications(java.util.Collections.singletonList(sub));
 
                 Intent intent = buildNotificationIntent(sub);
                 int requestCode = getRequestCode(sub);

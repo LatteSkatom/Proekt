@@ -15,7 +15,6 @@ public class SubscriptionAdapter extends RecyclerView.Adapter<SubscriptionAdapte
     private List<FirebaseSubscription> subscriptionList;
     private OnSubscriptionLongClickListener longClickListener;
 
-    // Конструктор с обработчиком долгого нажатия
     public SubscriptionAdapter(List<FirebaseSubscription> subscriptionList, OnSubscriptionLongClickListener longClickListener) {
         this.subscriptionList = subscriptionList;
         this.longClickListener = longClickListener;
@@ -37,10 +36,9 @@ public class SubscriptionAdapter extends RecyclerView.Adapter<SubscriptionAdapte
         holder.cost.setText(subscription.cost + " ₽");
         holder.nextPayment.setText("След. платёж: " + subscription.nextPaymentDate);
 
-        // 🔹 Обработка долгого нажатия
         holder.itemView.setOnLongClickListener(v -> {
             if (longClickListener != null) {
-                longClickListener.onSubscriptionLongClick(subscription, position);
+                longClickListener.onLongClick(subscription, position);
             }
             return true;
         });
@@ -51,26 +49,22 @@ public class SubscriptionAdapter extends RecyclerView.Adapter<SubscriptionAdapte
         return subscriptionList.size();
     }
 
-    // 🔹 Метод для удаления элемента
     public void removeAt(int position) {
         subscriptionList.remove(position);
         notifyItemRemoved(position);
     }
 
-    // 🔹 Метод для восстановления элемента
     public void restoreAt(FirebaseSubscription subscription, int position) {
         subscriptionList.add(position, subscription);
         notifyItemInserted(position);
     }
 
-    // 🔹 Метод для получения списка (например, чтобы сохранить в память)
     public List<FirebaseSubscription> getSubscriptions() {
         return subscriptionList;
     }
 
-    // 🔹 Интерфейс для долгого нажатия
     public interface OnSubscriptionLongClickListener {
-        void onSubscriptionLongClick(FirebaseSubscription subscription, int position);
+        void onLongClick(FirebaseSubscription subscription, int position);
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {

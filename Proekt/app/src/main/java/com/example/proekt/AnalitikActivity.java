@@ -1,17 +1,21 @@
 package com.example.proekt;
 
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.TextView;
+
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.imageview.ShapeableImageView;
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.Query;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,21 +23,22 @@ import java.util.Locale;
 
 public class AnalitikActivity extends AppCompatActivity {
 
+    private static final String TAG = "AnalitikActivity";
+
     private TextView subCountTv;
     private TextView totalSumTv;
     private Button periodBtn;
 
-    private int userId;
-    private final Gson gson = new Gson();
-
-    // 0 = Месяц, 1 = Неделя, 2 = Год
+    private final String[] PERIOD_LABELS = {"Месяц", "Неделя", "Год"};
     private int periodIndex = 0;
 
-    private final String[] PERIOD_LABELS = {"Месяц", "Неделя", "Год"};
-    private static final int GUEST_ID = -1;
+    private FirebaseAuth auth;
+    private FirebaseFirestore firestore;
+    private ListenerRegistration subscriptionsListener;
+    private final List<FirebaseSubscription> subscriptions = new ArrayList<>();
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.analitika);
 
@@ -41,36 +46,18 @@ public class AnalitikActivity extends AppCompatActivity {
         totalSumTv = findViewById(R.id.totalSum);
         periodBtn = findViewById(R.id.periodBtn);
 
-        // user_id берем как везде
-        SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
-        userId = prefs.getInt("user_id", GUEST_ID);
-
-        // ====================================================================
-        // ✅ ШАГ 1: Назначаем слушателей для ВСЕХ КНОПОК
-        // (Это всегда должно выполняться)
-        // ====================================================================
+        auth = FirebaseAuth.getInstance();
+        firestore = FirebaseFirestore.getInstance();
 
         Button addButton = findViewById(R.id.add_button);
-        addButton.setOnClickListener(v -> {
-            Intent intent = new Intent(AnalitikActivity.this, AddActivity.class);
-            intent.putExtra("user_id", userId);
-            startActivity(intent);
-        });
+        addButton.setOnClickListener(v -> startActivity(new Intent(AnalitikActivity.this, AddActivity.class)));
 
-        // Кнопка "Подписки"
         Button subButton = findViewById(R.id.sub_button);
-        subButton.setOnClickListener(v -> {
-            Intent intent = new Intent(AnalitikActivity.this, MainActivity.class);
-            startActivity(intent);
-        });
+        subButton.setOnClickListener(v -> startActivity(new Intent(AnalitikActivity.this, MainActivity.class)));
 
         ShapeableImageView settingsbutton = findViewById(R.id.settingsbutt);
-        settingsbutton.setOnClickListener(v -> {
-            Intent intent = new Intent(AnalitikActivity.this, Seting_activity.class);
-            startActivity(intent);
-        });
+        settingsbutton.setOnClickListener(v -> startActivity(new Intent(AnalitikActivity.this, Seting_activity.class)));
 
-        // Настройка кнопки переключения периодов (теперь она всегда активна)
         periodBtn.setText(PERIOD_LABELS[periodIndex]);
         periodBtn.setOnClickListener(v -> {
             periodIndex = (periodIndex + 1) % PERIOD_LABELS.length;
@@ -78,85 +65,74 @@ public class AnalitikActivity extends AppCompatActivity {
             updateAnalytics();
         });
 
-
-        // ====================================================================
-        // ✅ ШАГ 2: Запускаем Аналитику
-        // (Запускаем для всех. Если данных нет, она покажет 0.)
-        // ====================================================================
-        updateAnalytics();
+        signInIfNeeded();
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        // В onResume также просто обновляем аналитику для всех.
-        updateAnalytics();
+    protected void onDestroy() {
+        if (subscriptionsListener != null) {
+            subscriptionsListener.remove();
+        }
+        super.onDestroy();
+    }
+
+    private void signInIfNeeded() {
+        FirebaseUser currentUser = auth.getCurrentUser();
+        if (currentUser == null) {
+            auth.signInAnonymously()
+                    .addOnSuccessListener(result -> listenSubscriptions())
+                    .addOnFailureListener(e -> Log.e(TAG, "Auth failed", e));
+        } else {
+            listenSubscriptions();
+        }
+    }
+
+    private void listenSubscriptions() {
+        FirebaseUser currentUser = auth.getCurrentUser();
+        if (currentUser == null) return;
+
+        subscriptionsListener = firestore.collection("users")
+                .document(currentUser.getUid())
+                .collection("subscriptions")
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .addSnapshotListener((snapshot, e) -> {
+                    if (e != null) {
+                        Log.e(TAG, "load error", e);
+                        return;
+                    }
+                    if (snapshot == null) return;
+
+                    subscriptions.clear();
+                    for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                        FirebaseSubscription sub = doc.toObject(FirebaseSubscription.class);
+                        if (sub != null) {
+                            sub.id = doc.getId();
+                            subscriptions.add(sub);
+                        }
+                    }
+                    updateAnalytics();
+                });
     }
 
     private void updateAnalytics() {
-        // Мы больше не делаем ранний выход для Гостя,
-        // так как loadSubscriptions() вернет либо данные Гостя, либо пустой список.
-
-        List<JsonObject> list = loadSubscriptions();
-
-        int count = list.size();
+        int count = subscriptions.size();
         double monthSum = 0.0;
 
-        for (JsonObject obj : list) {
-            double cost = 0.0;
-            try {
-                if (obj.has("cost") && !obj.get("cost").isJsonNull()) {
-                    cost = obj.get("cost").getAsDouble();
-                }
-            } catch (Exception ignored) {}
-
-            monthSum += cost;
+        for (FirebaseSubscription sub : subscriptions) {
+            monthSum += sub.cost;
         }
 
         subCountTv.setText("Подписок: " + count);
 
-        double result = 0.0;
-        String suffix = "";
-
-        if (PERIOD_LABELS[periodIndex].equals("Месяц")) {
-            result = monthSum;
-            suffix = "мес";
-        } else if (PERIOD_LABELS[periodIndex].equals("Неделя")) {
+        double result;
+        if (PERIOD_LABELS[periodIndex].equals("Неделя")) {
             result = monthSum / 4.345;
-            suffix = "нед";
         } else if (PERIOD_LABELS[periodIndex].equals("Год")) {
             result = monthSum * 12.0;
-            suffix = "год";
+        } else {
+            result = monthSum;
         }
 
-        // Оставляю форматирование, как вы просили, хотя 'suffix' тут игнорируется.
-        totalSumTv.setText(String.format(Locale.getDefault(), "Сумма: %.2f ₽", result, suffix));
-
-        // 🔥 Добавление: Если вы хотите, чтобы суффикс менялся, строка должна быть такой:
-        // totalSumTv.setText(String.format(Locale.getDefault(), "Сумма: %.2f ₽/%s", result, suffix));
-    }
-
-    private List<JsonObject> loadSubscriptions() {
-        List<JsonObject> out = new ArrayList<>();
-
-        if (userId == 0) return out;
-
-        try {
-            SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
-            String key = "cached_subscriptions_" + userId; // key будет "cached_subscriptions_-1" для гостя
-            String raw = prefs.getString(key, "[]");
-
-            JsonArray arr = gson.fromJson(raw, JsonArray.class);
-            if (arr == null) return out;
-
-            for (JsonElement el : arr) {
-                if (el.isJsonObject()) {
-                    out.add(el.getAsJsonObject());
-                }
-            }
-
-        } catch (Exception ignored) {}
-
-        return out;
+        totalSumTv.setText(String.format(Locale.getDefault(), "Сумма: %.2f ₽", result));
     }
 }
