@@ -115,7 +115,7 @@ public class AddActivity extends AppCompatActivity {
         Map<String, Object> subscriptionData = new HashMap<>();
         subscriptionData.put("serviceName", serviceName);
         subscriptionData.put("cost", cost);
-        subscriptionData.put("frequency", "monthly");
+        subscriptionData.put("frequency", "MONTHLY");
         subscriptionData.put("nextPaymentDate", date);
         subscriptionData.put("isActive", true);
         subscriptionData.put("createdAt", FieldValue.serverTimestamp());

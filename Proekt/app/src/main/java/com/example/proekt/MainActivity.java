@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.Collections;
 import java.util.Locale;
 
 /**
@@ -118,6 +119,9 @@ public class MainActivity extends AppCompatActivity {
         FirebaseUser currentUser = auth.getCurrentUser();
         if (currentUser == null) return;
 
+        List<FirebaseSubscription> previousSubscriptions = new ArrayList<>(subscriptionList);
+        cancelNotifications(previousSubscriptions);
+
         subscriptionRegistration = firestore.collection("users")
                 .document(currentUser.getUid())
                 .collection("subscriptions")
@@ -195,12 +199,10 @@ public class MainActivity extends AppCompatActivity {
                 long now = System.currentTimeMillis();
                 if (triggerTime <= now) continue;
 
-                Intent intent = new Intent(this, NotificationReceiver.class);
-                intent.putExtra("service_name", sub.serviceName);
-                intent.putExtra("cost", String.valueOf(sub.cost));
+                cancelNotifications(java.util.Collections.singletonList(sub));
 
-                int requestCode = sub.id != null ? sub.id.hashCode() : (int) calendar.getTimeInMillis();
-                requestCode = Math.abs(requestCode);
+                Intent intent = buildNotificationIntent(sub);
+                int requestCode = getRequestCode(sub);
 
                 PendingIntent pendingIntent = PendingIntent.getBroadcast(
                         this,
@@ -223,6 +225,44 @@ public class MainActivity extends AppCompatActivity {
                 Log.e(TAG, "Ошибка при планировании уведомления", e);
             }
         }
+    }
+
+    private void cancelNotifications(List<FirebaseSubscription> subscriptions) {
+        for (FirebaseSubscription sub : subscriptions) {
+            try {
+                int requestCode = getRequestCode(sub);
+                Intent intent = buildNotificationIntent(sub);
+                PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                        this,
+                        requestCode,
+                        intent,
+                        PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_NO_CREATE
+                );
+
+                if (pendingIntent != null) {
+                    AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+                    if (alarmManager != null) {
+                        alarmManager.cancel(pendingIntent);
+                    }
+                    pendingIntent.cancel();
+                }
+            } catch (Exception ex) {
+                Log.e(TAG, "Ошибка отмены уведомления", ex);
+            }
+        }
+    }
+
+    private Intent buildNotificationIntent(FirebaseSubscription sub) {
+        Intent intent = new Intent(this, NotificationReceiver.class);
+        intent.setAction("SUBSCRIPTION_NOTIFICATION_" + (sub.id != null ? sub.id : sub.serviceName));
+        intent.putExtra("service_name", sub.serviceName);
+        intent.putExtra("cost", String.valueOf(sub.cost));
+        return intent;
+    }
+
+    private int getRequestCode(FirebaseSubscription sub) {
+        String key = sub.id != null ? sub.id : sub.serviceName + sub.nextPaymentDate;
+        return Math.abs(key.hashCode());
     }
 
     private void ensureUserDocument(FirebaseUser user) {
