@@ -8,8 +8,6 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.example.proekt.utils.ActivityTransitionUtils;
-import com.example.proekt.utils.WindowUtils;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
@@ -22,7 +20,7 @@ public class LoginActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
-        WindowUtils.setupTransparentNavigationBar(this);
+        // Используем стандартные переходы без дополнительных утилит
 
         auth = FirebaseAuth.getInstance();
 
@@ -32,7 +30,7 @@ public class LoginActivity extends AppCompatActivity {
         buttonRegister = findViewById(R.id.buttonregister);
 
         buttonlogin.setOnClickListener(v -> signInAnonymously());
-        buttonRegister.setOnClickListener(v -> ActivityTransitionUtils.startActivityWithFade(this, new Intent(this, RegisterActivity.class)));
+        buttonRegister.setOnClickListener(v -> startActivity(new Intent(this, RegisterActivity.class)));
     }
 
     private void signInAnonymously() {
@@ -49,6 +47,7 @@ public class LoginActivity extends AppCompatActivity {
 
     private void openMain() {
         Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-        ActivityTransitionUtils.startActivityClearStack(this, intent);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
     }
 }

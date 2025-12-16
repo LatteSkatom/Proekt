@@ -10,8 +10,6 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.example.proekt.utils.ActivityTransitionUtils;
-import com.example.proekt.utils.WindowUtils;
 import com.google.android.material.imageview.ShapeableImageView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -36,7 +34,7 @@ public class AddActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.add_sub);
-        WindowUtils.setupTransparentNavigationBar(this);
+        // Используем стандартные переходы без зависимостей от вспомогательных утилит
 
         auth = FirebaseAuth.getInstance();
         firestore = FirebaseFirestore.getInstance();
@@ -51,19 +49,19 @@ public class AddActivity extends AppCompatActivity {
         Button addButton = findViewById(R.id.sub_button);
         addButton.setOnClickListener(v -> {
             setResult(RESULT_CANCELED);
-            ActivityTransitionUtils.finishWithSlideBack(this);
+            finish();
         });
 
         ShapeableImageView settingsbutton = findViewById(R.id.settingsbutt);
         settingsbutton.setOnClickListener(v -> {
             Intent intent = new Intent(AddActivity.this, Seting_activity.class);
-            ActivityTransitionUtils.startActivityWithSlide(this, intent);
+            startActivity(intent);
         });
 
         Button analitikbutton = findViewById(R.id.Analit_button);
         analitikbutton.setOnClickListener(v -> {
             Intent intent = new Intent(AddActivity.this, AnalitikActivity.class);
-            ActivityTransitionUtils.startActivityWithSlide(this, intent);
+            startActivity(intent);
         });
 
         etDate.setFocusable(false);
@@ -135,6 +133,6 @@ public class AddActivity extends AppCompatActivity {
         Intent resultIntent = new Intent();
         resultIntent.putExtra("updated", true);
         setResult(RESULT_OK, resultIntent);
-        ActivityTransitionUtils.finishWithSlideBack(this);
+        finish();
     }
 }

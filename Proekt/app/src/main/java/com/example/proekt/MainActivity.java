@@ -15,8 +15,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.proekt.utils.ActivityTransitionUtils;
-import com.example.proekt.utils.WindowUtils;
 import com.google.android.material.imageview.ShapeableImageView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -56,7 +54,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        WindowUtils.setupTransparentNavigationBar(this);
+        // Используем стандартную конфигурацию окна без дополнительных утилит
 
         auth = FirebaseAuth.getInstance();
         firestore = FirebaseFirestore.getInstance();
@@ -74,19 +72,19 @@ public class MainActivity extends AppCompatActivity {
         Button addButton = findViewById(R.id.add_button);
         addButton.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, AddActivity.class);
-            ActivityTransitionUtils.startActivityForResultWithSlide(this, intent, 1001);
+            startActivityForResult(intent, 1001);
         });
 
         ShapeableImageView settingsbutton = findViewById(R.id.settingsbutt);
         settingsbutton.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, Seting_activity.class);
-            ActivityTransitionUtils.startActivityWithSlide(this, intent);
+            startActivity(intent);
         });
 
         Button analitikbutton = findViewById(R.id.Analit_button);
         analitikbutton.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, AnalitikActivity.class);
-            ActivityTransitionUtils.startActivityWithSlide(this, intent);
+            startActivity(intent);
         });
 
         signInIfNeeded();
