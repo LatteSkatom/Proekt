@@ -1,100 +1,172 @@
 package com.example.proekt;
 
 import android.content.Intent;
-import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import com.google.android.material.imageview.ShapeableImageView; // Важно!
+
+import com.bumptech.glide.Glide;
+import com.google.android.material.imageview.ShapeableImageView;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.SetOptions;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.StorageReference;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class Seting_activity extends AppCompatActivity {
 
-    private int userId;
-    private boolean isLoggedIn = false;
-    private ShapeableImageView buttonAction; // Теперь это ShapeableImageView
+    private ShapeableImageView avatarImage;
+    private EditText editDisplayName;
+    private Button buttonSaveProfile;
+    private ShapeableImageView actionButton;
 
-    // 🔥 Идентификаторы твоих изображений
-    // Убедись, что твои файлы называются enter_but.png и exitbutt.png
-    private static final int DRAWABLE_LOGOUT = R.drawable.exitbutt;
-    private static final int DRAWABLE_LOGIN = R.drawable.enter_but;
+    private FirebaseAuth auth;
+    private FirebaseFirestore firestore;
+    private FirebaseStorage storage;
+
+    private Uri selectedAvatarUri;
+
+    private final ActivityResultLauncher<String> pickImageLauncher = registerForActivityResult(
+            new ActivityResultContracts.GetContent(),
+            this::onAvatarSelected
+    );
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.setings);
 
-        // Получаем user_id и статус
-        SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
-        userId = prefs.getInt("user_id", 0);
+        auth = FirebaseAuth.getInstance();
+        firestore = FirebaseFirestore.getInstance();
+        storage = FirebaseStorage.getInstance();
 
-        isLoggedIn = prefs.getBoolean("is_logged_in", false) && userId > 0;
+        avatarImage = findViewById(R.id.avatarImage);
+        editDisplayName = findViewById(R.id.editDisplayName);
+        buttonSaveProfile = findViewById(R.id.buttonSaveProfile);
+        actionButton = findViewById(R.id.action_button);
 
-        // -------------------------
-        //   НАСТРОЙКА КНОПОК НАВИГАЦИИ (без изменений)
-        // -------------------------
+        Button changeAvatarButton = findViewById(R.id.buttonChangeAvatar);
+        changeAvatarButton.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
+
+        buttonSaveProfile.setOnClickListener(v -> saveProfile());
+        actionButton.setOnClickListener(v -> finish());
 
         Button addButton = findViewById(R.id.add_button);
-        addButton.setOnClickListener(v -> {
-            Intent intent = new Intent(Seting_activity.this, AddActivity.class);
-            intent.putExtra("user_id", userId);
-            startActivity(intent);
-        });
+        addButton.setOnClickListener(v -> startActivity(new Intent(Seting_activity.this, AddActivity.class)));
 
         Button subButton = findViewById(R.id.sub_button);
-        subButton.setOnClickListener(v -> {
-            Intent intent = new Intent(Seting_activity.this, MainActivity.class);
-            startActivity(intent);
-        });
+        subButton.setOnClickListener(v -> startActivity(new Intent(Seting_activity.this, MainActivity.class)));
 
         Button analitButton = findViewById(R.id.Analit_button);
-        analitButton.setOnClickListener(v -> {
-            Intent intent = new Intent(Seting_activity.this, AnalitikActivity.class);
-            startActivity(intent);
-        });
+        analitButton.setOnClickListener(v -> startActivity(new Intent(Seting_activity.this, AnalitikActivity.class)));
 
-        // ------------------------------------------
-        //   УСЛОВНОЕ ОТОБРАЖЕНИЕ КНОПКИ ВХОДА/ВЫХОДА
-        // ------------------------------------------
+        loadProfile();
+    }
 
-        // Используем ID, который ты установил в XML (или R.id.exitbutton, если не менял)
-        buttonAction = findViewById(R.id.action_button);
+    private void loadProfile() {
+        FirebaseUser user = auth.getCurrentUser();
+        if (user == null) {
+            auth.signInAnonymously().addOnSuccessListener(result -> fetchUserDocument(result.getUser()));
+            return;
+        }
+        fetchUserDocument(user);
+    }
 
-        if (isLoggedIn) {
-            // Если авторизован: кнопка становится "Выйти"
-            buttonAction.setImageResource(DRAWABLE_LOGOUT); // Ставим изображение выхода
-            buttonAction.setOnClickListener(v -> logoutUser());
-        } else {
-            // Если Гость: кнопка становится "Войти"
-            buttonAction.setImageResource(DRAWABLE_LOGIN); // Ставим изображение входа
-            buttonAction.setOnClickListener(v -> navigateToLogin());
+    private void fetchUserDocument(FirebaseUser user) {
+        DocumentReference userRef = firestore.collection("users").document(user.getUid());
+        userRef.get().addOnSuccessListener(snapshot -> {
+            if (snapshot.exists()) {
+                String name = snapshot.getString("name");
+                String avatarUrl = snapshot.getString("avatarUrl");
+                editDisplayName.setText(!TextUtils.isEmpty(name) ? name : "Гость");
+                if (!TextUtils.isEmpty(avatarUrl)) {
+                    Glide.with(this)
+                            .load(avatarUrl)
+                            .placeholder(R.drawable.avatar_placeholder)
+                            .centerCrop()
+                            .into(avatarImage);
+                } else {
+                    avatarImage.setImageResource(R.drawable.avatar_placeholder);
+                }
+            } else {
+                createDefaultUser(userRef);
+            }
+        }).addOnFailureListener(e -> Toast.makeText(this, "Не удалось загрузить профиль", Toast.LENGTH_SHORT).show());
+    }
+
+    private void createDefaultUser(DocumentReference userRef) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("name", "Гость");
+        data.put("avatarUrl", null);
+        data.put("createdAt", com.google.firebase.firestore.FieldValue.serverTimestamp());
+        userRef.set(data, SetOptions.merge());
+        editDisplayName.setText("Гость");
+        avatarImage.setImageResource(R.drawable.avatar_placeholder);
+    }
+
+    private void onAvatarSelected(@Nullable Uri uri) {
+        if (uri != null) {
+            selectedAvatarUri = uri;
+            avatarImage.setImageURI(uri);
         }
     }
 
-    /** Переход к экрану входа/регистрации */
-    private void navigateToLogin() {
-        Intent intent = new Intent(Seting_activity.this, LoginActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        startActivity(intent);
+    private void saveProfile() {
+        FirebaseUser user = auth.getCurrentUser();
+        if (user == null) {
+            Toast.makeText(this, "Пользователь не найден", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String displayName = editDisplayName.getText().toString().trim();
+        if (TextUtils.isEmpty(displayName)) {
+            displayName = "Гость";
+        }
+
+        DocumentReference userRef = firestore.collection("users").document(user.getUid());
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("name", displayName);
+
+        if (selectedAvatarUri != null) {
+            uploadAvatarAndSave(user, selectedAvatarUri, updates, userRef);
+        } else {
+            userRef.set(updates, SetOptions.merge())
+                    .addOnSuccessListener(v -> Toast.makeText(this, "Профиль сохранён", Toast.LENGTH_SHORT).show())
+                    .addOnFailureListener(e -> Toast.makeText(this, "Ошибка сохранения профиля", Toast.LENGTH_SHORT).show());
+        }
     }
 
-    /** Выход из аккаунта авторизованного пользователя */
-    private void logoutUser() {
-        SharedPreferences prefs = getSharedPreferences("user_prefs", MODE_PRIVATE);
+    private void uploadAvatarAndSave(FirebaseUser user, Uri avatarUri, Map<String, Object> updates, DocumentReference userRef) {
+        StorageReference avatarRef = storage.getReference()
+                .child("avatars/")
+                .child(user.getUid() + ".jpg");
 
-        // 1. Сбрасываем все авторизационные данные
-        prefs.edit()
-                .remove("user_id")
-                .remove("username")
-                .putBoolean("is_logged_in", false)
-                .apply();
-
-        Toast.makeText(this, "Вы успешно вышли из аккаунта", Toast.LENGTH_SHORT).show();
-
-        // 2. Перезапускаем MainActivity.
-        Intent intent = new Intent(Seting_activity.this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        startActivity(intent);
+        avatarRef.putFile(avatarUri)
+                .continueWithTask(task -> {
+                    if (!task.isSuccessful()) {
+                        throw task.getException();
+                    }
+                    return avatarRef.getDownloadUrl();
+                })
+                .addOnSuccessListener(downloadUri -> {
+                    updates.put("avatarUrl", downloadUri.toString());
+                    userRef.set(updates, SetOptions.merge())
+                            .addOnSuccessListener(v -> Toast.makeText(this, "Профиль сохранён", Toast.LENGTH_SHORT).show())
+                            .addOnFailureListener(e -> Toast.makeText(this, "Ошибка сохранения профиля", Toast.LENGTH_SHORT).show());
+                })
+                .addOnFailureListener(e -> Toast.makeText(this, "Не удалось загрузить аватар", Toast.LENGTH_SHORT).show());
     }
 }
