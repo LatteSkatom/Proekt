@@ -1,9 +1,10 @@
 package com.example.proekt;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.text.TextUtils;
+import android.provider.MediaStore;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -15,11 +16,9 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.bumptech.glide.Glide;
 import com.google.android.material.imageview.ShapeableImageView;
-import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.SetOptions;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
@@ -28,145 +27,100 @@ import java.util.Map;
 
 public class Seting_activity extends AppCompatActivity {
 
-    private ShapeableImageView avatarImage;
-    private EditText editDisplayName;
-    private Button buttonSaveProfile;
-    private ShapeableImageView actionButton;
-
-    private FirebaseAuth auth;
+    private SessionManager sessionManager;
     private FirebaseFirestore firestore;
-    private FirebaseStorage storage;
+    private ShapeableImageView avatarView;
+    private Uri selectedImageUri;
 
-    private Uri selectedAvatarUri;
+    private final ActivityResultLauncher<Intent> pickImageLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                    selectedImageUri = result.getData().getData();
+                    if (selectedImageUri != null) {
+                        Glide.with(this).load(selectedImageUri).into(avatarView);
+                    }
+                }
+            }
+    );
 
-    private final ActivityResultLauncher<String> pickImageLauncher = registerForActivityResult(
-            new ActivityResultContracts.GetContent(),
-            this::onAvatarSelected
+    private final ActivityResultLauncher<Intent> loginLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == RESULT_OK) {
+                    updateUi();
+                }
+            }
     );
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.setings);
 
-        auth = FirebaseAuth.getInstance();
-        firestore = FirebaseFirestore.getInstance();
-        storage = FirebaseStorage.getInstance();
+        sessionManager = SessionManager.getInstance(this);
+        firestore = sessionManager.getFirestore();
 
-        avatarImage = findViewById(R.id.avatarImage);
-        editDisplayName = findViewById(R.id.editDisplayName);
-        buttonSaveProfile = findViewById(R.id.buttonSaveProfile);
-        actionButton = findViewById(R.id.action_button);
+        avatarView = findViewById(R.id.profile_image);
+        EditText nameField = findViewById(R.id.name_edit_text);
+        Button saveButton = findViewById(R.id.save_button);
+        Button pickImageButton = findViewById(R.id.pick_avatar_button);
 
-        Button changeAvatarButton = findViewById(R.id.buttonChangeAvatar);
-        changeAvatarButton.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
-
-        buttonSaveProfile.setOnClickListener(v -> saveProfile());
-        actionButton.setOnClickListener(v -> finish());
-
-        Button addButton = findViewById(R.id.add_button);
-        addButton.setOnClickListener(v -> startActivity(new Intent(Seting_activity.this, AddActivity.class)));
-
-        Button subButton = findViewById(R.id.sub_button);
-        subButton.setOnClickListener(v -> startActivity(new Intent(Seting_activity.this, MainActivity.class)));
-
-        Button analitButton = findViewById(R.id.Analit_button);
-        analitButton.setOnClickListener(v -> startActivity(new Intent(Seting_activity.this, AnalitikActivity.class)));
-
-        loadProfile();
-    }
-
-    private void loadProfile() {
-        FirebaseUser user = auth.getCurrentUser();
-        if (user == null) {
-            auth.signInAnonymously().addOnSuccessListener(result -> fetchUserDocument(result.getUser()));
-            return;
-        }
-        fetchUserDocument(user);
-    }
-
-    private void fetchUserDocument(FirebaseUser user) {
-        DocumentReference userRef = firestore.collection("users").document(user.getUid());
-        userRef.get().addOnSuccessListener(snapshot -> {
-            if (snapshot.exists()) {
-                String name = snapshot.getString("name");
-                String avatarUrl = snapshot.getString("avatarUrl");
-                editDisplayName.setText(!TextUtils.isEmpty(name) ? name : "Гость");
-                if (!TextUtils.isEmpty(avatarUrl)) {
-                    Glide.with(this)
-                            .load(avatarUrl)
-                            .placeholder(R.drawable.avatar_placeholder)
-                            .centerCrop()
-                            .into(avatarImage);
-                } else {
-                    avatarImage.setImageResource(R.drawable.avatar_placeholder);
-                }
-            } else {
-                createDefaultUser(userRef);
+        pickImageButton.setOnClickListener(v -> {
+            if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
+                Toast.makeText(this, "Доступно после входа", Toast.LENGTH_SHORT).show();
+                return;
             }
-        }).addOnFailureListener(e -> Toast.makeText(this, "Не удалось загрузить профиль", Toast.LENGTH_SHORT).show());
+            Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            pickImageLauncher.launch(intent);
+        });
+
+        saveButton.setOnClickListener(v -> {
+            if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
+                Toast.makeText(this, "Войдите для сохранения", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            FirebaseUser user = sessionManager.getAuth().getCurrentUser();
+            if (user == null) return;
+            String name = nameField.getText().toString().trim();
+            Map<String, Object> data = new HashMap<>();
+            data.put("name", name);
+            data.put("updatedAt", FieldValue.serverTimestamp());
+            firestore.collection("users").document(user.getUid()).update(data);
+            if (selectedImageUri != null) {
+                uploadAvatar(user.getUid(), selectedImageUri);
+            }
+        });
+
+        avatarView.setOnClickListener(v -> {
+            if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
+                loginLauncher.launch(new Intent(this, LoginActivity.class));
+            } else {
+                sessionManager.signOutToGuest();
+                Toast.makeText(this, "Вы вышли", Toast.LENGTH_SHORT).show();
+                updateUi();
+            }
+        });
+
+        updateUi();
     }
 
-    private void createDefaultUser(DocumentReference userRef) {
-        Map<String, Object> data = new HashMap<>();
-        data.put("name", "Гость");
-        data.put("avatarUrl", null);
-        data.put("createdAt", com.google.firebase.firestore.FieldValue.serverTimestamp());
-        userRef.set(data, SetOptions.merge());
-        editDisplayName.setText("Гость");
-        avatarImage.setImageResource(R.drawable.avatar_placeholder);
-    }
-
-    private void onAvatarSelected(@Nullable Uri uri) {
-        if (uri != null) {
-            selectedAvatarUri = uri;
-            avatarImage.setImageURI(uri);
-        }
-    }
-
-    private void saveProfile() {
-        FirebaseUser user = auth.getCurrentUser();
-        if (user == null) {
-            Toast.makeText(this, "Пользователь не найден", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        String displayName = editDisplayName.getText().toString().trim();
-        if (TextUtils.isEmpty(displayName)) {
-            displayName = "Гость";
-        }
-
-        DocumentReference userRef = firestore.collection("users").document(user.getUid());
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("name", displayName);
-
-        if (selectedAvatarUri != null) {
-            uploadAvatarAndSave(user, selectedAvatarUri, updates, userRef);
+    private void updateUi() {
+        if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
+            avatarView.setImageResource(R.drawable.ic_login);
         } else {
-            userRef.set(updates, SetOptions.merge())
-                    .addOnSuccessListener(v -> Toast.makeText(this, "Профиль сохранён", Toast.LENGTH_SHORT).show())
-                    .addOnFailureListener(e -> Toast.makeText(this, "Ошибка сохранения профиля", Toast.LENGTH_SHORT).show());
+            FirebaseUser user = sessionManager.getAuth().getCurrentUser();
+            if (user != null && user.getPhotoUrl() != null) {
+                Glide.with(this).load(user.getPhotoUrl()).into(avatarView);
+            } else {
+                avatarView.setImageResource(R.drawable.avatar_placeholder);
+            }
         }
     }
 
-    private void uploadAvatarAndSave(FirebaseUser user, Uri avatarUri, Map<String, Object> updates, DocumentReference userRef) {
-        StorageReference avatarRef = storage.getReference()
-                .child("avatars/")
-                .child(user.getUid() + ".jpg");
-
-        avatarRef.putFile(avatarUri)
-                .continueWithTask(task -> {
-                    if (!task.isSuccessful()) {
-                        throw task.getException();
-                    }
-                    return avatarRef.getDownloadUrl();
-                })
-                .addOnSuccessListener(downloadUri -> {
-                    updates.put("avatarUrl", downloadUri.toString());
-                    userRef.set(updates, SetOptions.merge())
-                            .addOnSuccessListener(v -> Toast.makeText(this, "Профиль сохранён", Toast.LENGTH_SHORT).show())
-                            .addOnFailureListener(e -> Toast.makeText(this, "Ошибка сохранения профиля", Toast.LENGTH_SHORT).show());
-                })
-                .addOnFailureListener(e -> Toast.makeText(this, "Не удалось загрузить аватар", Toast.LENGTH_SHORT).show());
+    private void uploadAvatar(String uid, Uri uri) {
+        StorageReference ref = FirebaseStorage.getInstance().getReference().child("avatars/" + uid + ".jpg");
+        ref.putFile(uri).continueWithTask(task -> ref.getDownloadUrl())
+                .addOnSuccessListener(downloadUri -> firestore.collection("users").document(uid)
+                        .update("avatarUrl", downloadUri.toString()))
+                .addOnFailureListener(e -> Toast.makeText(this, "Ошибка загрузки", Toast.LENGTH_SHORT).show());
     }
 }

@@ -3,7 +3,9 @@ package com.example.proekt;
 import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.Exclude;
 
-public class FirebaseSubscription {
+import java.io.Serializable;
+
+public class FirebaseSubscription implements Serializable {
 
     @Exclude
     public String id;
@@ -16,7 +18,6 @@ public class FirebaseSubscription {
     public Timestamp createdAt;
 
     public FirebaseSubscription() {
-        // Обязательный пустой конструктор для Firestore
     }
 
     public FirebaseSubscription(String serviceName, double cost, String frequency,

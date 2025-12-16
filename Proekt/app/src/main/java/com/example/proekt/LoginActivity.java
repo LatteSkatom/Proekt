@@ -6,48 +6,54 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
-
 public class LoginActivity extends AppCompatActivity {
-    private EditText Username, Password;
-    private Button buttonlogin, buttonRegister;
-    private FirebaseAuth auth;
+
+    private AuthManager authManager;
+    private final ActivityResultLauncher<Intent> googleLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getData() != null) {
+                    authManager.handleGoogleResult(result.getData(), new ToastCallback());
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
-        // Используем стандартные переходы без дополнительных утилит
 
-        auth = FirebaseAuth.getInstance();
+        authManager = new AuthManager(this);
 
-        Username = findViewById(R.id.Username);
-        Password = findViewById(R.id.Password);
-        buttonlogin = findViewById(R.id.buttonlogin);
-        buttonRegister = findViewById(R.id.buttonregister);
+        EditText emailOrLogin = findViewById(R.id.email_edit_text);
+        EditText password = findViewById(R.id.password_edit_text);
+        Button loginButton = findViewById(R.id.login_button);
+        Button googleButton = findViewById(R.id.google_button);
+        Button registerButton = findViewById(R.id.register_button);
 
-        buttonlogin.setOnClickListener(v -> signInAnonymously());
-        buttonRegister.setOnClickListener(v -> startActivity(new Intent(this, RegisterActivity.class)));
+        loginButton.setOnClickListener(v -> authManager.loginWithEmailOrLogin(
+                emailOrLogin.getText().toString().trim(),
+                password.getText().toString().trim(),
+                new ToastCallback()
+        ));
+
+        registerButton.setOnClickListener(v -> startActivity(new Intent(this, RegisterActivity.class)));
+        googleButton.setOnClickListener(v -> authManager.startGoogle(this, googleLauncher));
     }
 
-    private void signInAnonymously() {
-        FirebaseUser current = auth.getCurrentUser();
-        if (current != null) {
-            openMain();
-            return;
+    private class ToastCallback implements AuthManager.AuthCallback {
+        @Override
+        public void onSuccess() {
+            Toast.makeText(LoginActivity.this, "Вход выполнен", Toast.LENGTH_SHORT).show();
+            setResult(RESULT_OK);
+            finish();
         }
 
-        auth.signInAnonymously()
-                .addOnSuccessListener(result -> openMain())
-                .addOnFailureListener(e -> Toast.makeText(this, "Не удалось войти: " + e.getMessage(), Toast.LENGTH_SHORT).show());
-    }
-
-    private void openMain() {
-        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        startActivity(intent);
+        @Override
+        public void onError(String message) {
+            Toast.makeText(LoginActivity.this, message, Toast.LENGTH_SHORT).show();
+        }
     }
 }
