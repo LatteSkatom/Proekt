@@ -89,6 +89,13 @@ public class SessionManager {
         return new ArrayList<>(pendingCloudDeletions);
     }
 
+    public void markDeletionSynced(String subscriptionId) {
+        if (subscriptionId == null) return;
+        if (pendingCloudDeletions.remove(subscriptionId)) {
+            persistPendingCloudDeletions();
+        }
+    }
+
     public void registerListener(ListenerRegistration registration) {
         if (registration != null) {
             listeners.add(registration);
@@ -197,6 +204,37 @@ public class SessionManager {
         }
     }
 
+    /**
+     * Removes a subscription from the local cache using its Firestore id when
+     * available. This keeps local state authoritative and ensures UI renders
+     * exclusively from the cached source even while offline.
+     */
+    public void removeLocalSubscriptionById(String subscriptionId, FirebaseSubscription fallback) {
+        if (subscriptionId != null) {
+            Iterator<FirebaseSubscription> iterator = localSubscriptions.iterator();
+            while (iterator.hasNext()) {
+                FirebaseSubscription next = iterator.next();
+                if (subscriptionId.equals(next.id)) {
+                    iterator.remove();
+                    persistLocalSubscriptions();
+                    return;
+                }
+            }
+        }
+        // If there is no stable id (e.g., pending additions) fall back to
+        // content-based comparison to keep cache aligned with the UI.
+        if (fallback != null) {
+            Iterator<FirebaseSubscription> iterator = localSubscriptions.iterator();
+            while (iterator.hasNext()) {
+                if (sameSubscription(iterator.next(), fallback)) {
+                    iterator.remove();
+                    persistLocalSubscriptions();
+                    return;
+                }
+            }
+        }
+    }
+
     public boolean hasNetworkConnection() {
         ConnectivityManager cm = (ConnectivityManager) appContext.getSystemService(Context.CONNECTIVITY_SERVICE);
         if (cm == null) return false;
@@ -245,6 +283,13 @@ public class SessionManager {
         }
     }
 
+    /**
+     * Queues a remove operation so it can be replayed against Firestore once
+     * connectivity returns. The deletion is persisted locally immediately to
+     * honor the offline-first contract; Firestore is only updated later when
+     * online because it does not reliably serve data after process death while
+     * offline.
+     */
     public void queuePendingDeletion(String subscriptionId, FirebaseSubscription subscription) {
         if (subscriptionId == null) {
             removeMatchingPendingAdd(subscription);
@@ -430,6 +475,7 @@ public class SessionManager {
     private JSONObject toJson(FirebaseSubscription sub) {
         try {
             JSONObject obj = new JSONObject();
+            obj.put("id", sub.id);
             obj.put("serviceName", sub.serviceName);
             obj.put("cost", sub.cost);
             obj.put("frequency", sub.frequency);
@@ -445,6 +491,7 @@ public class SessionManager {
 
     private FirebaseSubscription fromJson(JSONObject obj) {
         try {
+            String id = obj.optString("id", null);
             String serviceName = obj.optString("serviceName", null);
             double cost = obj.optDouble("cost", 0);
             String frequency = obj.optString("frequency", null);
@@ -452,7 +499,9 @@ public class SessionManager {
             boolean isActive = obj.optBoolean("isActive", true);
             long createdAt = obj.optLong("createdAt", -1);
             Timestamp ts = createdAt > 0 ? new Timestamp(new java.util.Date(createdAt)) : null;
-            return new FirebaseSubscription(serviceName, cost, frequency, nextDate, isActive, ts);
+            FirebaseSubscription subscription = new FirebaseSubscription(serviceName, cost, frequency, nextDate, isActive, ts);
+            subscription.id = id;
+            return subscription;
         } catch (Exception e) {
             Log.e("SessionManager", "fromJson", e);
             return null;
