@@ -83,28 +83,20 @@
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@drawable/setingsb" />
 
-    <androidx.cardview.widget.CardView
-        android:id="@+id/profile_card"
-        android:layout_width="160dp"
-        android:layout_height="150dp"
+    <com.google.android.material.imageview.ShapeableImageView
+        android:id="@+id/profile_image"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
         android:layout_marginTop="24dp"
-        android:background="@drawable/card_bg"
-        app:cardCornerRadius="12dp"
-        app:cardUseCompatPadding="true"
+        android:background="@drawable/circle_stroke"
+        android:padding="6dp"
+        android:scaleType="centerCrop"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/imageView4">
-
-        <com.google.android.material.imageview.ShapeableImageView
-            android:id="@+id/profile_image"
-            android:layout_width="104dp"
-            android:layout_height="104dp"
-            android:layout_gravity="center"
-            android:background="@drawable/circle_bg"
-            android:padding="6dp"
-            android:scaleType="centerCrop"
-            app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.Material3.Corner.Full" />
-    </androidx.cardview.widget.CardView>
+        app:layout_constraintTop_toBottomOf="@+id/imageView4"
+        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.Material3.Corner.Full"
+        app:strokeColor="@color/white"
+        app:strokeWidth="2dp" />
 
     <Button
         android:id="@+id/pick_avatar_button"
@@ -117,9 +109,9 @@
         android:textAllCaps="false"
         android:textColor="@color/black"
         android:textSize="14sp"
-        app:layout_constraintEnd_toEndOf="@+id/profile_card"
-        app:layout_constraintStart_toStartOf="@+id/profile_card"
-        app:layout_constraintTop_toBottomOf="@+id/profile_card" />
+        app:layout_constraintEnd_toEndOf="@+id/profile_image"
+        app:layout_constraintStart_toStartOf="@+id/profile_image"
+        app:layout_constraintTop_toBottomOf="@+id/profile_image" />
 
     <EditText
         android:id="@+id/name_edit_text"
