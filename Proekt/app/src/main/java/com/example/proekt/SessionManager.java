@@ -12,6 +12,12 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreSettings;
 import com.google.firebase.firestore.ListenerRegistration;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -21,6 +27,7 @@ public class SessionManager {
     public enum Mode { GUEST, CLOUD }
 
     private static SessionManager instance;
+    private final Context appContext;
     private final FirebaseAuth auth;
     private final FirebaseFirestore firestore;
     private final List<ListenerRegistration> listeners = new ArrayList<>();
@@ -28,12 +35,14 @@ public class SessionManager {
     private Mode mode = Mode.GUEST;
 
     private SessionManager(Context context) {
+        appContext = context.getApplicationContext();
         auth = FirebaseAuth.getInstance();
         firestore = FirebaseFirestore.getInstance();
         FirebaseFirestoreSettings settings = new FirebaseFirestoreSettings.Builder()
                 .setPersistenceEnabled(true)
                 .build();
         firestore.setFirestoreSettings(settings);
+        loadLocalSubscriptions();
         enterGuestMode();
     }
 
@@ -98,12 +107,14 @@ public class SessionManager {
     public void addLocalSubscription(FirebaseSubscription subscription) {
         if (subscription != null) {
             localSubscriptions.add(0, subscription);
+            persistLocalSubscriptions();
         }
     }
 
     public void removeLocalSubscription(int position) {
         if (position >= 0 && position < localSubscriptions.size()) {
             localSubscriptions.remove(position);
+            persistLocalSubscriptions();
         }
     }
 
@@ -119,5 +130,64 @@ public class SessionManager {
             data.put("createdAt", FieldValue.serverTimestamp());
             ref.set(data);
         });
+    }
+
+    private File getLocalCacheFile() {
+        return new File(appContext.getFilesDir(), "local_subscriptions.dat");
+    }
+
+    private void persistLocalSubscriptions() {
+        File file = getLocalCacheFile();
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(file))) {
+            List<CachedSubscription> cache = new ArrayList<>();
+            for (FirebaseSubscription sub : localSubscriptions) {
+                cache.add(new CachedSubscription(sub));
+            }
+            oos.writeObject(cache);
+        } catch (Exception e) {
+            Log.e("SessionManager", "persistLocalSubscriptions", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void loadLocalSubscriptions() {
+        File file = getLocalCacheFile();
+        if (!file.exists()) return;
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+            Object obj = ois.readObject();
+            if (obj instanceof List<?>) {
+                localSubscriptions.clear();
+                for (Object item : (List<?>) obj) {
+                    if (item instanceof CachedSubscription) {
+                        localSubscriptions.add(((CachedSubscription) item).toSubscription());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e("SessionManager", "loadLocalSubscriptions", e);
+        }
+    }
+
+    private static class CachedSubscription implements Serializable {
+        String serviceName;
+        double cost;
+        String frequency;
+        String nextPaymentDate;
+        boolean isActive;
+        Long createdAtMillis;
+
+        CachedSubscription(FirebaseSubscription sub) {
+            this.serviceName = sub.serviceName;
+            this.cost = sub.cost;
+            this.frequency = sub.frequency;
+            this.nextPaymentDate = sub.nextPaymentDate;
+            this.isActive = sub.isActive;
+            this.createdAtMillis = sub.createdAt != null ? sub.createdAt.toDate().getTime() : null;
+        }
+
+        FirebaseSubscription toSubscription() {
+            Timestamp ts = createdAtMillis != null ? new Timestamp(new java.util.Date(createdAtMillis)) : null;
+            return new FirebaseSubscription(serviceName, cost, frequency, nextPaymentDate, isActive, ts);
+        }
     }
 }
