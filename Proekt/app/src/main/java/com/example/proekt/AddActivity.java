@@ -4,7 +4,6 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
-import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.Toast;
 
@@ -34,19 +33,17 @@ public class AddActivity extends AppCompatActivity {
 
         EditText serviceField = findViewById(R.id.editServiceName);
         EditText costField = findViewById(R.id.editCost);
-        EditText frequencyField = findViewById(R.id.frequencyEditText);
         EditText nextPaymentField = findViewById(R.id.editDate);
-        CheckBox activeCheck = findViewById(R.id.activeCheckBox);
         View saveButton = findViewById(R.id.save_button);
 
         saveButton.setOnClickListener(v -> {
             String serviceName = serviceField.getText().toString().trim();
             String costText = costField.getText().toString().trim();
-            String frequency = frequencyField.getText().toString().trim();
             String nextDate = nextPaymentField.getText().toString().trim();
-            boolean isActive = activeCheck.isChecked();
+            String frequency = "MONTHLY";
+            boolean isActive = true;
 
-            if (TextUtils.isEmpty(serviceName) || TextUtils.isEmpty(costText) || TextUtils.isEmpty(frequency) || TextUtils.isEmpty(nextDate)) {
+            if (TextUtils.isEmpty(serviceName) || TextUtils.isEmpty(costText) || TextUtils.isEmpty(nextDate)) {
                 Toast.makeText(this, "Заполните все поля", Toast.LENGTH_SHORT).show();
                 return;
             }
