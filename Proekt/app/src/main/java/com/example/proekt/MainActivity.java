@@ -253,8 +253,33 @@ public class MainActivity extends AppCompatActivity {
 
     private void mergePendingSubscriptions() {
         List<FirebaseSubscription> pending = sessionManager.getPendingCloudSubscriptions();
-        if (!pending.isEmpty()) {
-            subscriptionList.addAll(0, pending);
+        if (pending.isEmpty()) return;
+
+        for (FirebaseSubscription pendingSub : pending) {
+            boolean alreadyPresent = false;
+            for (FirebaseSubscription existing : subscriptionList) {
+                if (sameSubscription(existing, pendingSub)) {
+                    alreadyPresent = true;
+                    break;
+                }
+            }
+            if (!alreadyPresent) {
+                subscriptionList.add(0, pendingSub);
+            }
         }
+    }
+
+    private boolean sameSubscription(FirebaseSubscription a, FirebaseSubscription b) {
+        if (a == null || b == null) return false;
+        if (Double.compare(a.cost, b.cost) != 0) return false;
+        if (a.isActive != b.isActive) return false;
+        if (!safeEquals(a.serviceName, b.serviceName)) return false;
+        if (!safeEquals(a.frequency, b.frequency)) return false;
+        return safeEquals(a.nextPaymentDate, b.nextPaymentDate);
+    }
+
+    private boolean safeEquals(String a, String b) {
+        if (a == null) return b == null;
+        return a.equals(b);
     }
 }
