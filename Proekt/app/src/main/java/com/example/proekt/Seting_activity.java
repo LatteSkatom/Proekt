@@ -63,6 +63,9 @@ public class Seting_activity extends AppCompatActivity {
         EditText nameField = findViewById(R.id.name_edit_text);
         Button saveButton = findViewById(R.id.save_button);
         Button pickImageButton = findViewById(R.id.pick_avatar_button);
+        Button addButton = findViewById(R.id.add_button);
+        Button subButton = findViewById(R.id.sub_button);
+        Button analyticsButton = findViewById(R.id.Analit_button);
 
         pickImageButton.setOnClickListener(v -> {
             if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
@@ -99,6 +102,10 @@ public class Seting_activity extends AppCompatActivity {
                 updateUi();
             }
         });
+
+        addButton.setOnClickListener(v -> startActivity(new Intent(this, AddActivity.class)));
+        subButton.setOnClickListener(v -> startActivity(new Intent(this, MainActivity.class)));
+        analyticsButton.setOnClickListener(v -> startActivity(new Intent(this, AnalitikActivity.class)));
 
         updateUi();
     }

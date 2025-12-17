@@ -1,6 +1,7 @@
 package com.example.proekt;
 
 import android.content.Intent;
+import android.app.DatePickerDialog;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
@@ -15,7 +16,10 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 public class AddActivity extends AppCompatActivity {
@@ -35,6 +39,28 @@ public class AddActivity extends AppCompatActivity {
         EditText costField = findViewById(R.id.editCost);
         EditText nextPaymentField = findViewById(R.id.editDate);
         View saveButton = findViewById(R.id.save_button);
+
+        nextPaymentField.setFocusable(false);
+        nextPaymentField.setClickable(true);
+        nextPaymentField.setOnClickListener(v -> showDatePicker(nextPaymentField));
+
+        findViewById(R.id.sub_button).setOnClickListener(v -> {
+            startActivity(new Intent(AddActivity.this, MainActivity.class));
+            finish();
+        });
+
+        View analyticsButton = findViewById(R.id.Analit_button);
+        if (analyticsButton != null) {
+            analyticsButton.setOnClickListener(v -> {
+                startActivity(new Intent(AddActivity.this, AnalitikActivity.class));
+                finish();
+            });
+        }
+
+        View settingsButton = findViewById(R.id.settingsbutt);
+        if (settingsButton != null) {
+            settingsButton.setOnClickListener(v -> startActivity(new Intent(AddActivity.this, Seting_activity.class)));
+        }
 
         saveButton.setOnClickListener(v -> {
             String serviceName = serviceField.getText().toString().trim();
@@ -81,5 +107,23 @@ public class AddActivity extends AppCompatActivity {
                         .addOnFailureListener(e -> Toast.makeText(AddActivity.this, "Ошибка сохранения", Toast.LENGTH_SHORT).show());
             }
         });
+    }
+
+    private void showDatePicker(EditText target) {
+        Calendar calendar = Calendar.getInstance();
+        DatePickerDialog dialog = new DatePickerDialog(
+                this,
+                (view, year, month, dayOfMonth) -> {
+                    Calendar selected = Calendar.getInstance();
+                    selected.set(year, month, dayOfMonth);
+                    String formatted = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                            .format(selected.getTime());
+                    target.setText(formatted);
+                },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)
+        );
+        dialog.show();
     }
 }
