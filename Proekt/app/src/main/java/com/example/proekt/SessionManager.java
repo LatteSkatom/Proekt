@@ -43,7 +43,7 @@ public class SessionManager {
                 .build();
         firestore.setFirestoreSettings(settings);
         loadLocalSubscriptions();
-        enterGuestMode();
+        initializeMode();
     }
 
     public static synchronized SessionManager getInstance(Context context) {
@@ -134,6 +134,15 @@ public class SessionManager {
 
     private File getLocalCacheFile() {
         return new File(appContext.getFilesDir(), "local_subscriptions.dat");
+    }
+
+    private void initializeMode() {
+        FirebaseUser currentUser = auth.getCurrentUser();
+        if (currentUser != null) {
+            enableCloudMode(currentUser);
+        } else {
+            enterGuestMode();
+        }
     }
 
     private void persistLocalSubscriptions() {
