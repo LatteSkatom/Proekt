@@ -32,6 +32,7 @@ public class SessionManager {
     private final FirebaseFirestore firestore;
     private final List<ListenerRegistration> listeners = new ArrayList<>();
     private final List<FirebaseSubscription> localSubscriptions = new ArrayList<>();
+    private final List<FirebaseSubscription> pendingCloudSubscriptions = new ArrayList<>();
     private Mode mode = Mode.GUEST;
 
     private SessionManager(Context context) {
@@ -43,6 +44,7 @@ public class SessionManager {
                 .build();
         firestore.setFirestoreSettings(settings);
         loadLocalSubscriptions();
+        loadPendingCloudSubscriptions();
         initializeMode();
     }
 
@@ -65,6 +67,10 @@ public class SessionManager {
         return firestore;
     }
 
+    public List<FirebaseSubscription> getPendingCloudSubscriptions() {
+        return new ArrayList<>(pendingCloudSubscriptions);
+    }
+
     public void registerListener(ListenerRegistration registration) {
         if (registration != null) {
             listeners.add(registration);
@@ -84,7 +90,7 @@ public class SessionManager {
     public void enterGuestMode() {
         mode = Mode.GUEST;
         clearListeners();
-        firestore.disableNetwork().addOnFailureListener(e -> Log.w("SessionManager", "disableNetwork", e));
+        firestore.enableNetwork().addOnFailureListener(e -> Log.w("SessionManager", "enableNetwork", e));
     }
 
     public void enableCloudMode(FirebaseUser user) {
@@ -92,6 +98,7 @@ public class SessionManager {
         mode = Mode.CLOUD;
         firestore.enableNetwork().addOnFailureListener(e -> Log.w("SessionManager", "enableNetwork", e));
         ensureUserDocument(user);
+        syncPendingCloudSubscriptions();
     }
 
     public void signOutToGuest() {
@@ -111,10 +118,54 @@ public class SessionManager {
         }
     }
 
+    public interface SubscriptionSaveCallback {
+        void onSuccess(boolean syncedImmediately);
+
+        void onError(String message);
+    }
+
+    public void saveCloudSubscription(FirebaseSubscription subscription, SubscriptionSaveCallback callback) {
+        FirebaseUser user = auth.getCurrentUser();
+        if (user == null) {
+            callback.onError("Авторизуйтесь");
+            return;
+        }
+
+        Map<String, Object> data = buildFirestoreData(subscription);
+        firestore.collection("users")
+                .document(user.getUid())
+                .collection("subscriptions")
+                .add(data)
+                .addOnSuccessListener(r -> callback.onSuccess(true))
+                .addOnFailureListener(e -> {
+                    addPendingCloudSubscription(subscription);
+                    callback.onSuccess(false);
+                });
+    }
+
     public void removeLocalSubscription(int position) {
         if (position >= 0 && position < localSubscriptions.size()) {
             localSubscriptions.remove(position);
             persistLocalSubscriptions();
+        }
+    }
+
+    public void syncPendingCloudSubscriptions() {
+        FirebaseUser user = auth.getCurrentUser();
+        if (user == null || pendingCloudSubscriptions.isEmpty()) return;
+
+        List<FirebaseSubscription> toSync = new ArrayList<>(pendingCloudSubscriptions);
+        for (FirebaseSubscription sub : toSync) {
+            Map<String, Object> data = buildFirestoreData(sub);
+            firestore.collection("users")
+                    .document(user.getUid())
+                    .collection("subscriptions")
+                    .add(data)
+                    .addOnSuccessListener(r -> {
+                        pendingCloudSubscriptions.remove(sub);
+                        persistPendingCloudSubscriptions();
+                    })
+                    .addOnFailureListener(e -> Log.w("SessionManager", "syncPending", e));
         }
     }
 
@@ -134,6 +185,10 @@ public class SessionManager {
 
     private File getLocalCacheFile() {
         return new File(appContext.getFilesDir(), "local_subscriptions.dat");
+    }
+
+    private File getPendingCacheFile() {
+        return new File(appContext.getFilesDir(), "pending_cloud_subscriptions.dat");
     }
 
     private void initializeMode() {
@@ -159,6 +214,20 @@ public class SessionManager {
         }
     }
 
+    private void persistPendingCloudSubscriptions() {
+        File file = getPendingCacheFile();
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(file))) {
+            List<CachedSubscription> cache = new ArrayList<>();
+            for (FirebaseSubscription sub : pendingCloudSubscriptions) {
+                cache.add(new CachedSubscription(sub));
+            }
+            oos.writeObject(cache);
+            oos.flush();
+        } catch (Exception e) {
+            Log.e("SessionManager", "persistPendingCloudSubscriptions", e);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private void loadLocalSubscriptions() {
         File file = getLocalCacheFile();
@@ -179,6 +248,45 @@ public class SessionManager {
             //noinspection ResultOfMethodCallIgnored
             file.delete();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void loadPendingCloudSubscriptions() {
+        File file = getPendingCacheFile();
+        if (!file.exists()) return;
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+            Object obj = ois.readObject();
+            if (obj instanceof List<?>) {
+                pendingCloudSubscriptions.clear();
+                for (Object item : (List<?>) obj) {
+                    if (item instanceof CachedSubscription) {
+                        pendingCloudSubscriptions.add(((CachedSubscription) item).toSubscription());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e("SessionManager", "loadPending", e);
+            //noinspection ResultOfMethodCallIgnored
+            file.delete();
+        }
+    }
+
+    private void addPendingCloudSubscription(FirebaseSubscription subscription) {
+        if (subscription != null) {
+            pendingCloudSubscriptions.add(0, subscription);
+            persistPendingCloudSubscriptions();
+        }
+    }
+
+    private Map<String, Object> buildFirestoreData(FirebaseSubscription subscription) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("serviceName", subscription.serviceName);
+        data.put("cost", subscription.cost);
+        data.put("frequency", subscription.frequency);
+        data.put("nextPaymentDate", subscription.nextPaymentDate);
+        data.put("isActive", subscription.isActive);
+        data.put("createdAt", FieldValue.serverTimestamp());
+        return data;
     }
 
     private static class CachedSubscription implements Serializable {

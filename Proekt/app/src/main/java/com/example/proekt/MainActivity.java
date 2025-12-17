@@ -80,6 +80,8 @@ public class MainActivity extends AppCompatActivity {
     private void refreshMode() {
         if (sessionManager.getMode() == SessionManager.Mode.CLOUD) {
             attachListener();
+            mergePendingSubscriptions();
+            sessionManager.syncPendingCloudSubscriptions();
         } else {
             detachListener();
             loadGuestSubscriptions();
@@ -109,6 +111,7 @@ public class MainActivity extends AppCompatActivity {
                             subscriptionIds.add(doc.getId());
                         }
                     }
+                    mergePendingSubscriptions();
                     adapter.notifyDataSetChanged();
                     scheduleNotifications(subscriptionList);
                 });
@@ -235,6 +238,8 @@ public class MainActivity extends AppCompatActivity {
             loadGuestSubscriptions();
         } else if (requestCode == LOGIN_REQUEST && resultCode == RESULT_OK) {
             refreshMode();
+        } else if (requestCode == ADD_REQUEST && resultCode == RESULT_OK) {
+            refreshMode();
         }
     }
 
@@ -244,5 +249,12 @@ public class MainActivity extends AppCompatActivity {
         subscriptionList.addAll(sessionManager.getLocalSubscriptions());
         adapter.notifyDataSetChanged();
         scheduleNotifications(subscriptionList);
+    }
+
+    private void mergePendingSubscriptions() {
+        List<FirebaseSubscription> pending = sessionManager.getPendingCloudSubscriptions();
+        if (!pending.isEmpty()) {
+            subscriptionList.addAll(0, pending);
+        }
     }
 }
