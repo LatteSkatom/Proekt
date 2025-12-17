@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Iterator;
 
 public class SessionManager {
     public enum Mode { GUEST, CLOUD }
@@ -33,6 +34,7 @@ public class SessionManager {
     private final List<ListenerRegistration> listeners = new ArrayList<>();
     private final List<FirebaseSubscription> localSubscriptions = new ArrayList<>();
     private final List<FirebaseSubscription> pendingCloudSubscriptions = new ArrayList<>();
+    private final List<String> pendingCloudDeletions = new ArrayList<>();
     private Mode mode = Mode.GUEST;
 
     private SessionManager(Context context) {
@@ -45,6 +47,7 @@ public class SessionManager {
         firestore.setFirestoreSettings(settings);
         loadLocalSubscriptions();
         loadPendingCloudSubscriptions();
+        loadPendingCloudDeletions();
         initializeMode();
     }
 
@@ -69,6 +72,10 @@ public class SessionManager {
 
     public List<FirebaseSubscription> getPendingCloudSubscriptions() {
         return new ArrayList<>(pendingCloudSubscriptions);
+    }
+
+    public List<String> getPendingCloudDeletions() {
+        return new ArrayList<>(pendingCloudDeletions);
     }
 
     public void registerListener(ListenerRegistration registration) {
@@ -156,7 +163,7 @@ public class SessionManager {
         }
     }
 
-    private boolean hasNetworkConnection() {
+    public boolean hasNetworkConnection() {
         android.net.ConnectivityManager cm = (android.net.ConnectivityManager) appContext.getSystemService(Context.CONNECTIVITY_SERVICE);
         if (cm == null) return false;
         android.net.NetworkInfo networkInfo = cm.getActiveNetworkInfo();
@@ -165,7 +172,25 @@ public class SessionManager {
 
     public void syncPendingCloudSubscriptions() {
         FirebaseUser user = auth.getCurrentUser();
-        if (user == null || pendingCloudSubscriptions.isEmpty()) return;
+        if (user == null || !hasNetworkConnection()) return;
+
+        if (!pendingCloudDeletions.isEmpty()) {
+            List<String> deletions = new ArrayList<>(pendingCloudDeletions);
+            for (String id : deletions) {
+                firestore.collection("users")
+                        .document(user.getUid())
+                        .collection("subscriptions")
+                        .document(id)
+                        .delete()
+                        .addOnSuccessListener(r -> {
+                            pendingCloudDeletions.remove(id);
+                            persistPendingCloudDeletions();
+                        })
+                        .addOnFailureListener(e -> Log.w("SessionManager", "syncDeletion", e));
+            }
+        }
+
+        if (pendingCloudSubscriptions.isEmpty()) return;
 
         List<FirebaseSubscription> toSync = new ArrayList<>(pendingCloudSubscriptions);
         for (FirebaseSubscription sub : toSync) {
@@ -180,6 +205,15 @@ public class SessionManager {
                     })
                     .addOnFailureListener(e -> Log.w("SessionManager", "syncPending", e));
         }
+    }
+
+    public void queuePendingDeletion(String subscriptionId, FirebaseSubscription subscription) {
+        if (subscriptionId == null) {
+            removeMatchingPendingAdd(subscription);
+            return;
+        }
+        pendingCloudDeletions.add(subscriptionId);
+        persistPendingCloudDeletions();
     }
 
     private void ensureUserDocument(FirebaseUser user) {
@@ -202,6 +236,10 @@ public class SessionManager {
 
     private File getPendingCacheFile() {
         return new File(appContext.getFilesDir(), "pending_cloud_subscriptions.dat");
+    }
+
+    private File getPendingDeletionFile() {
+        return new File(appContext.getFilesDir(), "pending_cloud_deletions.dat");
     }
 
     private void initializeMode() {
@@ -238,6 +276,16 @@ public class SessionManager {
             oos.flush();
         } catch (Exception e) {
             Log.e("SessionManager", "persistPendingCloudSubscriptions", e);
+        }
+    }
+
+    private void persistPendingCloudDeletions() {
+        File file = getPendingDeletionFile();
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(file))) {
+            oos.writeObject(new ArrayList<>(pendingCloudDeletions));
+            oos.flush();
+        } catch (Exception e) {
+            Log.e("SessionManager", "persistPendingCloudDeletions", e);
         }
     }
 
@@ -284,10 +332,44 @@ public class SessionManager {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    private void loadPendingCloudDeletions() {
+        File file = getPendingDeletionFile();
+        if (!file.exists()) return;
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+            Object obj = ois.readObject();
+            if (obj instanceof List<?>) {
+                pendingCloudDeletions.clear();
+                for (Object item : (List<?>) obj) {
+                    if (item instanceof String) {
+                        pendingCloudDeletions.add((String) item);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e("SessionManager", "loadPendingDeletions", e);
+            //noinspection ResultOfMethodCallIgnored
+            file.delete();
+        }
+    }
+
     private void addPendingCloudSubscription(FirebaseSubscription subscription) {
         if (subscription != null) {
             pendingCloudSubscriptions.add(0, subscription);
             persistPendingCloudSubscriptions();
+        }
+    }
+
+    private void removeMatchingPendingAdd(FirebaseSubscription subscription) {
+        if (subscription == null) return;
+        Iterator<FirebaseSubscription> iterator = pendingCloudSubscriptions.iterator();
+        while (iterator.hasNext()) {
+            FirebaseSubscription next = iterator.next();
+            if (sameSubscription(next, subscription)) {
+                iterator.remove();
+                persistPendingCloudSubscriptions();
+                break;
+            }
         }
     }
 
@@ -300,6 +382,20 @@ public class SessionManager {
         data.put("isActive", subscription.isActive);
         data.put("createdAt", FieldValue.serverTimestamp());
         return data;
+    }
+
+    private boolean sameSubscription(FirebaseSubscription a, FirebaseSubscription b) {
+        if (a == null || b == null) return false;
+        if (Double.compare(a.cost, b.cost) != 0) return false;
+        if (a.isActive != b.isActive) return false;
+        if (!safeEquals(a.serviceName, b.serviceName)) return false;
+        if (!safeEquals(a.frequency, b.frequency)) return false;
+        return safeEquals(a.nextPaymentDate, b.nextPaymentDate);
+    }
+
+    private boolean safeEquals(String a, String b) {
+        if (a == null) return b == null;
+        return a.equals(b);
     }
 
     private static class CachedSubscription implements Serializable {

@@ -139,24 +139,59 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void deleteSubscription(int position) {
-        if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
-            if (position >= 0 && position < subscriptionList.size()) {
-                FirebaseSubscription sub = subscriptionList.remove(position);
-                sessionManager.removeLocalSubscription(position);
-                adapter.notifyItemRemoved(position);
-                cancelNotifications(java.util.Collections.singletonList(sub));
-            }
+        boolean isGuest = sessionManager.getMode() == SessionManager.Mode.GUEST;
+        if (position < 0 || position >= subscriptionList.size()) return;
+
+        FirebaseSubscription sub = subscriptionList.get(position);
+
+        if (isGuest) {
+            subscriptionList.remove(position);
+            sessionManager.removeLocalSubscription(position);
+            adapter.notifyItemRemoved(position);
+            cancelNotifications(java.util.Collections.singletonList(sub));
             return;
         }
+
+        String subscriptionId = position < subscriptionIds.size() ? subscriptionIds.get(position) : null;
+        boolean online = sessionManager.hasNetworkConnection();
+
+        if (!online) {
+            sessionManager.queuePendingDeletion(subscriptionId, sub);
+            subscriptionList.remove(position);
+            if (subscriptionId != null) {
+                subscriptionIds.remove(position);
+            }
+            adapter.notifyItemRemoved(position);
+            cancelNotifications(java.util.Collections.singletonList(sub));
+            Toast.makeText(this, "Удаление сохранено офлайн", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         FirebaseUser user = sessionManager.getAuth().getCurrentUser();
-        if (user == null || position < 0 || position >= subscriptionIds.size()) return;
+        if (user == null) return;
+
+        if (subscriptionId == null) {
+            sessionManager.queuePendingDeletion(null, sub);
+            subscriptionList.remove(position);
+            adapter.notifyItemRemoved(position);
+            cancelNotifications(java.util.Collections.singletonList(sub));
+            return;
+        }
+
         sessionManager.getFirestore()
                 .collection("users")
                 .document(user.getUid())
                 .collection("subscriptions")
-                .document(subscriptionIds.get(position))
+                .document(subscriptionId)
                 .delete()
-                .addOnFailureListener(e -> Toast.makeText(this, "Ошибка удаления", Toast.LENGTH_SHORT).show());
+                .addOnFailureListener(e -> {
+                    sessionManager.queuePendingDeletion(subscriptionId, sub);
+                    subscriptionList.remove(position);
+                    subscriptionIds.remove(position);
+                    adapter.notifyItemRemoved(position);
+                    cancelNotifications(java.util.Collections.singletonList(sub));
+                    Toast.makeText(this, "Удаление будет выполнено после подключения", Toast.LENGTH_SHORT).show();
+                });
     }
 
     private void scheduleNotifications(List<FirebaseSubscription> subscriptions) {
