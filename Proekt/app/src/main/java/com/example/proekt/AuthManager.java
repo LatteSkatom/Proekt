@@ -7,10 +7,11 @@ import android.text.TextUtils;
 
 import androidx.activity.result.ActivityResultLauncher;
 
-import com.google.android.gms.auth.api.identity.BeginSignInRequest;
-import com.google.android.gms.auth.api.identity.Identity;
-import com.google.android.gms.auth.api.identity.SignInClient;
-import com.google.android.gms.auth.api.identity.SignInCredential;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
@@ -29,8 +30,7 @@ public class AuthManager {
     private final SessionManager sessionManager;
     private final FirebaseAuth auth;
     private final FirebaseFirestore firestore;
-    private SignInClient oneTapClient;
-    private BeginSignInRequest signInRequest;
+    private GoogleSignInClient googleSignInClient;
 
     public AuthManager(Context context) {
         sessionManager = SessionManager.getInstance(context);
@@ -40,29 +40,29 @@ public class AuthManager {
     }
 
     private void setupGoogleSignIn(Context context) {
-        oneTapClient = Identity.getSignInClient(context);
-        signInRequest = new BeginSignInRequest.Builder()
-                .setGoogleIdTokenRequestOptions(
-                        BeginSignInRequest.GoogleIdTokenRequestOptions.builder()
-                                .setSupported(true)
-                                .setServerClientId(context.getString(R.string.default_web_client_id))
-                                .setFilterByAuthorizedAccounts(false)
-                                .build())
+        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(context.getString(R.string.default_web_client_id))
+                .requestEmail()
                 .build();
+        googleSignInClient = GoogleSignIn.getClient(context, gso);
     }
 
     public void startGoogle(Activity activity, ActivityResultLauncher<Intent> launcher) {
-        oneTapClient.beginSignIn(signInRequest)
-                .addOnSuccessListener(result -> launcher.launch(result.getPendingIntent().getIntent()))
-                .addOnFailureListener(e -> activity.runOnUiThread(() -> {}));
+        Intent signInIntent = googleSignInClient.getSignInIntent();
+        launcher.launch(signInIntent);
     }
 
     public void handleGoogleResult(Intent data, AuthCallback callback) {
-        Task<SignInCredential> credentialTask = oneTapClient.getSignInCredentialFromIntent(data);
-        credentialTask.addOnSuccessListener(credential -> {
-            String idToken = credential.getGoogleIdToken();
-            AuthCredential firebaseCredential = GoogleAuthProvider.getCredential(idToken, null);
-            auth.signInWithCredential(firebaseCredential).addOnCompleteListener(task -> {
+        Task<GoogleSignInAccount> accountTask = GoogleSignIn.getSignedInAccountFromIntent(data);
+        try {
+            GoogleSignInAccount account = accountTask.getResult(ApiException.class);
+            if (account == null) {
+                callback.onError("Google sign-in failed");
+                return;
+            }
+            String idToken = account.getIdToken();
+            AuthCredential credential = GoogleAuthProvider.getCredential(idToken, null);
+            auth.signInWithCredential(credential).addOnCompleteListener(task -> {
                 if (task.isSuccessful()) {
                     FirebaseUser user = auth.getCurrentUser();
                     sessionManager.enableCloudMode(user);
@@ -72,7 +72,9 @@ public class AuthManager {
                     callback.onError("Google sign-in failed");
                 }
             });
-        }).addOnFailureListener(e -> callback.onError("Google sign-in failed"));
+        } catch (ApiException e) {
+            callback.onError("Google sign-in failed");
+        }
     }
 
     public void loginWithEmailOrLogin(String emailOrLogin, String password, AuthCallback callback) {
@@ -139,6 +141,9 @@ public class AuthManager {
 
     public void signOut() {
         sessionManager.signOutToGuest();
+        if (googleSignInClient != null) {
+            googleSignInClient.signOut();
+        }
     }
 
     private void createUserIfMissing(FirebaseUser user, String login) {
