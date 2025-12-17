@@ -7,6 +7,8 @@ import java.io.Serializable;
 
 public class FirebaseSubscription implements Serializable {
 
+    private static final long serialVersionUID = 1L;
+
     @Exclude
     public String id;
 

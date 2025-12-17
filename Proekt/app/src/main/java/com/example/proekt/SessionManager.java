@@ -144,6 +144,7 @@ public class SessionManager {
                 cache.add(new CachedSubscription(sub));
             }
             oos.writeObject(cache);
+            oos.flush();
         } catch (Exception e) {
             Log.e("SessionManager", "persistLocalSubscriptions", e);
         }
@@ -165,10 +166,14 @@ public class SessionManager {
             }
         } catch (Exception e) {
             Log.e("SessionManager", "loadLocalSubscriptions", e);
+            // reset corrupted cache to allow fresh saves to persist
+            //noinspection ResultOfMethodCallIgnored
+            file.delete();
         }
     }
 
     private static class CachedSubscription implements Serializable {
+        private static final long serialVersionUID = 1L;
         String serviceName;
         double cost;
         String frequency;
