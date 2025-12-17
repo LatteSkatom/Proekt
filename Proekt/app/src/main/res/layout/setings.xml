@@ -84,7 +84,7 @@
         app:srcCompat="@drawable/setingsb" />
 
     <com.google.android.material.imageview.ShapeableImageView
-        android:id="@+id/avatarImage"
+        android:id="@+id/profile_image"
         android:layout_width="96dp"
         android:layout_height="96dp"
         android:layout_marginTop="24dp"
@@ -96,17 +96,17 @@
         app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.None" />
 
     <Button
-        android:id="@+id/buttonChangeAvatar"
+        android:id="@+id/pick_avatar_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:text="Сменить аватар"
-        app:layout_constraintEnd_toEndOf="@+id/avatarImage"
-        app:layout_constraintStart_toStartOf="@+id/avatarImage"
-        app:layout_constraintTop_toBottomOf="@+id/avatarImage" />
+        app:layout_constraintEnd_toEndOf="@+id/profile_image"
+        app:layout_constraintStart_toStartOf="@+id/profile_image"
+        app:layout_constraintTop_toBottomOf="@+id/profile_image" />
 
     <EditText
-        android:id="@+id/editDisplayName"
+        android:id="@+id/name_edit_text"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="24dp"
@@ -116,10 +116,10 @@
         android:maxLines="1"
         app:layout_constraintEnd_toEndOf="@+id/imageView"
         app:layout_constraintStart_toStartOf="@+id/imageView"
-        app:layout_constraintTop_toBottomOf="@+id/buttonChangeAvatar" />
+        app:layout_constraintTop_toBottomOf="@+id/pick_avatar_button" />
 
     <Button
-        android:id="@+id/buttonSaveProfile"
+        android:id="@+id/save_button"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
@@ -128,7 +128,7 @@
         android:text="Сохранить профиль"
         app:layout_constraintEnd_toEndOf="@+id/imageView"
         app:layout_constraintStart_toStartOf="@+id/imageView"
-        app:layout_constraintTop_toBottomOf="@+id/editDisplayName" />
+        app:layout_constraintTop_toBottomOf="@+id/name_edit_text" />
 
     <com.google.android.material.imageview.ShapeableImageView
         android:id="@+id/action_button"
@@ -141,7 +141,7 @@
         app:layout_constraintEnd_toEndOf="@+id/imageView"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="@+id/imageView"
-        app:layout_constraintTop_toBottomOf="@+id/buttonSaveProfile"
+        app:layout_constraintTop_toBottomOf="@+id/save_button"
         app:srcCompat="@drawable/exitbutt" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
