@@ -253,9 +253,8 @@
             app:layout_constraintTop_toBottomOf="@+id/textInputLayoutDate"
             app:srcCompat="@drawable/savebuttonpng" />
 
-
     </androidx.constraintlayout.widget.ConstraintLayout>
-    
+
     </androidx.core.widget.NestedScrollView>
 
 
