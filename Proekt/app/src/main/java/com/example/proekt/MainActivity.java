@@ -235,7 +235,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == ADD_REQUEST && resultCode == RESULT_OK && data != null && sessionManager.getMode() == SessionManager.Mode.GUEST) {
+        if (requestCode == ADD_REQUEST && resultCode == RESULT_OK && sessionManager.getMode() == SessionManager.Mode.GUEST) {
             loadGuestSubscriptions();
         } else if (requestCode == LOGIN_REQUEST && resultCode == RESULT_OK) {
             refreshMode();

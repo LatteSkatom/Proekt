@@ -86,7 +86,7 @@ public class AddActivity extends AppCompatActivity {
 
             if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
                 sessionManager.addLocalSubscription(subscription);
-                setResult(RESULT_OK);
+                setResult(RESULT_OK, new Intent());
                 finish();
             } else {
                 FirebaseUser user = sessionManager.getAuth().getCurrentUser();
@@ -107,7 +107,7 @@ public class AddActivity extends AppCompatActivity {
                         .collection("subscriptions")
                         .add(data)
                         .addOnSuccessListener(r -> {
-                            setResult(RESULT_OK);
+                            setResult(RESULT_OK, new Intent());
                             finish();
                         })
                         .addOnFailureListener(e -> Toast.makeText(AddActivity.this, "Ошибка сохранения", Toast.LENGTH_SHORT).show());
