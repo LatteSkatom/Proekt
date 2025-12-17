@@ -74,13 +74,19 @@ public class AddActivity extends AppCompatActivity {
                 return;
             }
 
-            double cost = Double.parseDouble(costText);
+            double cost;
+            try {
+                cost = Double.parseDouble(costText.replace(",", "."));
+            } catch (NumberFormatException ex) {
+                Toast.makeText(this, "Некорректная цена", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
             FirebaseSubscription subscription = new FirebaseSubscription(serviceName, cost, frequency, nextDate, isActive, Timestamp.now());
 
             if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
-                Intent result = new Intent();
-                result.putExtra("subscription", subscription);
-                setResult(RESULT_OK, result);
+                sessionManager.addLocalSubscription(subscription);
+                setResult(RESULT_OK);
                 finish();
             } else {
                 FirebaseUser user = sessionManager.getAuth().getCurrentUser();

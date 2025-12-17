@@ -24,6 +24,7 @@ public class SessionManager {
     private final FirebaseAuth auth;
     private final FirebaseFirestore firestore;
     private final List<ListenerRegistration> listeners = new ArrayList<>();
+    private final List<FirebaseSubscription> localSubscriptions = new ArrayList<>();
     private Mode mode = Mode.GUEST;
 
     private SessionManager(Context context) {
@@ -88,6 +89,22 @@ public class SessionManager {
         clearListeners();
         auth.signOut();
         enterGuestMode();
+    }
+
+    public List<FirebaseSubscription> getLocalSubscriptions() {
+        return new ArrayList<>(localSubscriptions);
+    }
+
+    public void addLocalSubscription(FirebaseSubscription subscription) {
+        if (subscription != null) {
+            localSubscriptions.add(0, subscription);
+        }
+    }
+
+    public void removeLocalSubscription(int position) {
+        if (position >= 0 && position < localSubscriptions.size()) {
+            localSubscriptions.remove(position);
+        }
     }
 
     private void ensureUserDocument(FirebaseUser user) {

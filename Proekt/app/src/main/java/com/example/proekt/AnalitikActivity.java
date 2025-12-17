@@ -10,10 +10,8 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.imageview.ShapeableImageView;
-import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
 
@@ -32,10 +30,9 @@ public class AnalitikActivity extends AppCompatActivity {
     private final String[] PERIOD_LABELS = {"Месяц", "Неделя", "Год"};
     private int periodIndex = 0;
 
-    private FirebaseAuth auth;
-    private FirebaseFirestore firestore;
     private ListenerRegistration subscriptionsListener;
     private final List<FirebaseSubscription> subscriptions = new ArrayList<>();
+    private SessionManager sessionManager;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -46,8 +43,7 @@ public class AnalitikActivity extends AppCompatActivity {
         totalSumTv = findViewById(R.id.totalSum);
         periodBtn = findViewById(R.id.periodBtn);
 
-        auth = FirebaseAuth.getInstance();
-        firestore = FirebaseFirestore.getInstance();
+        sessionManager = SessionManager.getInstance(this);
 
         Button addButton = findViewById(R.id.add_button);
         addButton.setOnClickListener(v -> startActivity(new Intent(AnalitikActivity.this, AddActivity.class)));
@@ -65,7 +61,7 @@ public class AnalitikActivity extends AppCompatActivity {
             updateAnalytics();
         });
 
-        signInIfNeeded();
+        refreshMode();
     }
 
     @Override
@@ -76,22 +72,29 @@ public class AnalitikActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    private void signInIfNeeded() {
-        FirebaseUser currentUser = auth.getCurrentUser();
-        if (currentUser == null) {
-            auth.signInAnonymously()
-                    .addOnSuccessListener(result -> listenSubscriptions())
-                    .addOnFailureListener(e -> Log.e(TAG, "Auth failed", e));
-        } else {
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshMode();
+    }
+
+    private void refreshMode() {
+        if (sessionManager.getMode() == SessionManager.Mode.CLOUD) {
             listenSubscriptions();
+        } else {
+            useLocalSubscriptions();
         }
     }
 
     private void listenSubscriptions() {
-        FirebaseUser currentUser = auth.getCurrentUser();
+        FirebaseUser currentUser = sessionManager.getAuth().getCurrentUser();
         if (currentUser == null) return;
 
-        subscriptionsListener = firestore.collection("users")
+        if (subscriptionsListener != null) {
+            subscriptionsListener.remove();
+        }
+
+        subscriptionsListener = sessionManager.getFirestore().collection("users")
                 .document(currentUser.getUid())
                 .collection("subscriptions")
                 .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -112,6 +115,17 @@ public class AnalitikActivity extends AppCompatActivity {
                     }
                     updateAnalytics();
                 });
+    }
+
+    private void useLocalSubscriptions() {
+        if (subscriptionsListener != null) {
+            subscriptionsListener.remove();
+            subscriptionsListener = null;
+        }
+        subscriptions.clear();
+        List<FirebaseSubscription> local = sessionManager.getLocalSubscriptions();
+        subscriptions.addAll(local);
+        updateAnalytics();
     }
 
     private void updateAnalytics() {

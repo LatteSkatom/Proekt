@@ -47,7 +47,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         sessionManager = SessionManager.getInstance(this);
-        sessionManager.enterGuestMode();
 
         recyclerView = findViewById(R.id.recyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -61,7 +60,13 @@ public class MainActivity extends AppCompatActivity {
         settingsButton.setOnClickListener(v -> startActivity(new Intent(this, Seting_activity.class)));
 
         Button analitikButton = findViewById(R.id.Analit_button);
-        analitikButton.setOnClickListener(v -> startActivity(new Intent(this, AnalitikActivity.class)));
+        analitikButton.setOnClickListener(v -> {
+            Intent intent = new Intent(this, AnalitikActivity.class);
+            if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
+                intent.putExtra("local_subscriptions", new ArrayList<>(sessionManager.getLocalSubscriptions()));
+            }
+            startActivity(intent);
+        });
     }
 
     @Override
@@ -81,6 +86,7 @@ public class MainActivity extends AppCompatActivity {
             attachListener();
         } else {
             detachListener();
+            loadGuestSubscriptions();
         }
     }
 
@@ -137,6 +143,7 @@ public class MainActivity extends AppCompatActivity {
         if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
             if (position >= 0 && position < subscriptionList.size()) {
                 FirebaseSubscription sub = subscriptionList.remove(position);
+                sessionManager.removeLocalSubscription(position);
                 adapter.notifyItemRemoved(position);
                 cancelNotifications(java.util.Collections.singletonList(sub));
             }
@@ -229,14 +236,17 @@ public class MainActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == ADD_REQUEST && resultCode == RESULT_OK && data != null && sessionManager.getMode() == SessionManager.Mode.GUEST) {
-            FirebaseSubscription sub = (FirebaseSubscription) data.getSerializableExtra("subscription");
-            if (sub != null) {
-                subscriptionList.add(0, sub);
-                adapter.notifyItemInserted(0);
-                scheduleNotifications(subscriptionList);
-            }
+            loadGuestSubscriptions();
         } else if (requestCode == LOGIN_REQUEST && resultCode == RESULT_OK) {
             refreshMode();
         }
+    }
+
+    private void loadGuestSubscriptions() {
+        subscriptionList.clear();
+        subscriptionIds.clear();
+        subscriptionList.addAll(sessionManager.getLocalSubscriptions());
+        adapter.notifyDataSetChanged();
+        scheduleNotifications(subscriptionList);
     }
 }
