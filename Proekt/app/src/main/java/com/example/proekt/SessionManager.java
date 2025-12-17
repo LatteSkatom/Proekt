@@ -1,6 +1,11 @@
 package com.example.proekt;
 
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.util.Log;
 
 import com.google.firebase.Timestamp;
@@ -12,23 +17,21 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreSettings;
 import com.google.firebase.firestore.ListenerRegistration;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Iterator;
 
 public class SessionManager {
     public enum Mode { GUEST, CLOUD }
 
     private static SessionManager instance;
     private final Context appContext;
+    private final SharedPreferences prefs;
     private final FirebaseAuth auth;
     private final FirebaseFirestore firestore;
     private final List<ListenerRegistration> listeners = new ArrayList<>();
@@ -39,16 +42,20 @@ public class SessionManager {
 
     private SessionManager(Context context) {
         appContext = context.getApplicationContext();
+        prefs = appContext.getSharedPreferences("session_cache", Context.MODE_PRIVATE);
         auth = FirebaseAuth.getInstance();
         firestore = FirebaseFirestore.getInstance();
         FirebaseFirestoreSettings settings = new FirebaseFirestoreSettings.Builder()
-                .setPersistenceEnabled(true)
+                // Firestore caching is disabled because offline writes must be handled locally
+                // (SharedPreferences/Room) and synced only when the network is available.
+                .setPersistenceEnabled(false)
                 .build();
         firestore.setFirestoreSettings(settings);
         loadLocalSubscriptions();
         loadPendingCloudSubscriptions();
         loadPendingCloudDeletions();
         initializeMode();
+        registerNetworkCallback();
     }
 
     public static synchronized SessionManager getInstance(Context context) {
@@ -97,13 +104,15 @@ public class SessionManager {
     public void enterGuestMode() {
         mode = Mode.GUEST;
         clearListeners();
-        firestore.enableNetwork().addOnFailureListener(e -> Log.w("SessionManager", "enableNetwork", e));
     }
 
     public void enableCloudMode(FirebaseUser user) {
         if (user == null) return;
         mode = Mode.CLOUD;
-        firestore.enableNetwork().addOnFailureListener(e -> Log.w("SessionManager", "enableNetwork", e));
+        if (!hasNetworkConnection()) {
+            // Offline cloud mode defers any Firestore work until connectivity returns.
+            return;
+        }
         ensureUserDocument(user);
         syncPendingCloudSubscriptions();
     }
@@ -139,6 +148,7 @@ public class SessionManager {
         }
 
         if (!hasNetworkConnection()) {
+            // Firestore calls are skipped offline; we cache locally and sync once connectivity returns.
             addPendingCloudSubscription(subscription);
             callback.onSuccess(false);
             return;
@@ -164,10 +174,14 @@ public class SessionManager {
     }
 
     public boolean hasNetworkConnection() {
-        android.net.ConnectivityManager cm = (android.net.ConnectivityManager) appContext.getSystemService(Context.CONNECTIVITY_SERVICE);
+        ConnectivityManager cm = (ConnectivityManager) appContext.getSystemService(Context.CONNECTIVITY_SERVICE);
         if (cm == null) return false;
-        android.net.NetworkInfo networkInfo = cm.getActiveNetworkInfo();
-        return networkInfo != null && networkInfo.isConnected();
+        Network network = cm.getActiveNetwork();
+        if (network == null) return false;
+        NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+        return caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                || caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
     }
 
     public void syncPendingCloudSubscriptions() {
@@ -217,6 +231,7 @@ public class SessionManager {
     }
 
     private void ensureUserDocument(FirebaseUser user) {
+        if (!hasNetworkConnection()) return;
         DocumentReference ref = firestore.collection("users").document(user.getUid());
         ref.get().addOnSuccessListener(snapshot -> {
             if (snapshot.exists()) return;
@@ -230,18 +245,6 @@ public class SessionManager {
         });
     }
 
-    private File getLocalCacheFile() {
-        return new File(appContext.getFilesDir(), "local_subscriptions.dat");
-    }
-
-    private File getPendingCacheFile() {
-        return new File(appContext.getFilesDir(), "pending_cloud_subscriptions.dat");
-    }
-
-    private File getPendingDeletionFile() {
-        return new File(appContext.getFilesDir(), "pending_cloud_deletions.dat");
-    }
-
     private void initializeMode() {
         FirebaseUser currentUser = auth.getCurrentUser();
         if (currentUser != null) {
@@ -252,38 +255,36 @@ public class SessionManager {
     }
 
     private void persistLocalSubscriptions() {
-        File file = getLocalCacheFile();
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(file))) {
-            List<CachedSubscription> cache = new ArrayList<>();
+        try {
+            JSONArray array = new JSONArray();
             for (FirebaseSubscription sub : localSubscriptions) {
-                cache.add(new CachedSubscription(sub));
+                array.put(toJson(sub));
             }
-            oos.writeObject(cache);
-            oos.flush();
+            prefs.edit().putString("local_subscriptions", array.toString()).apply();
         } catch (Exception e) {
             Log.e("SessionManager", "persistLocalSubscriptions", e);
         }
     }
 
     private void persistPendingCloudSubscriptions() {
-        File file = getPendingCacheFile();
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(file))) {
-            List<CachedSubscription> cache = new ArrayList<>();
+        try {
+            JSONArray array = new JSONArray();
             for (FirebaseSubscription sub : pendingCloudSubscriptions) {
-                cache.add(new CachedSubscription(sub));
+                array.put(toJson(sub));
             }
-            oos.writeObject(cache);
-            oos.flush();
+            prefs.edit().putString("pending_additions", array.toString()).apply();
         } catch (Exception e) {
             Log.e("SessionManager", "persistPendingCloudSubscriptions", e);
         }
     }
 
     private void persistPendingCloudDeletions() {
-        File file = getPendingDeletionFile();
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(file))) {
-            oos.writeObject(new ArrayList<>(pendingCloudDeletions));
-            oos.flush();
+        try {
+            JSONArray array = new JSONArray();
+            for (String id : pendingCloudDeletions) {
+                array.put(id);
+            }
+            prefs.edit().putString("pending_deletions", array.toString()).apply();
         } catch (Exception e) {
             Log.e("SessionManager", "persistPendingCloudDeletions", e);
         }
@@ -291,65 +292,51 @@ public class SessionManager {
 
     @SuppressWarnings("unchecked")
     private void loadLocalSubscriptions() {
-        File file = getLocalCacheFile();
-        if (!file.exists()) return;
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
-            Object obj = ois.readObject();
-            if (obj instanceof List<?>) {
-                localSubscriptions.clear();
-                for (Object item : (List<?>) obj) {
-                    if (item instanceof CachedSubscription) {
-                        localSubscriptions.add(((CachedSubscription) item).toSubscription());
-                    }
-                }
+        localSubscriptions.clear();
+        String raw = prefs.getString("local_subscriptions", null);
+        if (raw == null) return;
+        try {
+            JSONArray array = new JSONArray(raw);
+            for (int i = 0; i < array.length(); i++) {
+                FirebaseSubscription sub = fromJson(array.getJSONObject(i));
+                if (sub != null) localSubscriptions.add(sub);
             }
         } catch (Exception e) {
             Log.e("SessionManager", "loadLocalSubscriptions", e);
-            // reset corrupted cache to allow fresh saves to persist
-            //noinspection ResultOfMethodCallIgnored
-            file.delete();
+            prefs.edit().remove("local_subscriptions").apply();
         }
     }
 
     @SuppressWarnings("unchecked")
     private void loadPendingCloudSubscriptions() {
-        File file = getPendingCacheFile();
-        if (!file.exists()) return;
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
-            Object obj = ois.readObject();
-            if (obj instanceof List<?>) {
-                pendingCloudSubscriptions.clear();
-                for (Object item : (List<?>) obj) {
-                    if (item instanceof CachedSubscription) {
-                        pendingCloudSubscriptions.add(((CachedSubscription) item).toSubscription());
-                    }
-                }
+        pendingCloudSubscriptions.clear();
+        String raw = prefs.getString("pending_additions", null);
+        if (raw == null) return;
+        try {
+            JSONArray array = new JSONArray(raw);
+            for (int i = 0; i < array.length(); i++) {
+                FirebaseSubscription sub = fromJson(array.getJSONObject(i));
+                if (sub != null) pendingCloudSubscriptions.add(sub);
             }
         } catch (Exception e) {
             Log.e("SessionManager", "loadPending", e);
-            //noinspection ResultOfMethodCallIgnored
-            file.delete();
+            prefs.edit().remove("pending_additions").apply();
         }
     }
 
     @SuppressWarnings("unchecked")
     private void loadPendingCloudDeletions() {
-        File file = getPendingDeletionFile();
-        if (!file.exists()) return;
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
-            Object obj = ois.readObject();
-            if (obj instanceof List<?>) {
-                pendingCloudDeletions.clear();
-                for (Object item : (List<?>) obj) {
-                    if (item instanceof String) {
-                        pendingCloudDeletions.add((String) item);
-                    }
-                }
+        pendingCloudDeletions.clear();
+        String raw = prefs.getString("pending_deletions", null);
+        if (raw == null) return;
+        try {
+            JSONArray array = new JSONArray(raw);
+            for (int i = 0; i < array.length(); i++) {
+                pendingCloudDeletions.add(array.getString(i));
             }
         } catch (Exception e) {
             Log.e("SessionManager", "loadPendingDeletions", e);
-            //noinspection ResultOfMethodCallIgnored
-            file.delete();
+            prefs.edit().remove("pending_deletions").apply();
         }
     }
 
@@ -398,27 +385,51 @@ public class SessionManager {
         return a.equals(b);
     }
 
-    private static class CachedSubscription implements Serializable {
-        private static final long serialVersionUID = 1L;
-        String serviceName;
-        double cost;
-        String frequency;
-        String nextPaymentDate;
-        boolean isActive;
-        Long createdAtMillis;
-
-        CachedSubscription(FirebaseSubscription sub) {
-            this.serviceName = sub.serviceName;
-            this.cost = sub.cost;
-            this.frequency = sub.frequency;
-            this.nextPaymentDate = sub.nextPaymentDate;
-            this.isActive = sub.isActive;
-            this.createdAtMillis = sub.createdAt != null ? sub.createdAt.toDate().getTime() : null;
+    private JSONObject toJson(FirebaseSubscription sub) {
+        try {
+            JSONObject obj = new JSONObject();
+            obj.put("serviceName", sub.serviceName);
+            obj.put("cost", sub.cost);
+            obj.put("frequency", sub.frequency);
+            obj.put("nextPaymentDate", sub.nextPaymentDate);
+            obj.put("isActive", sub.isActive);
+            obj.put("createdAt", sub.createdAt != null ? sub.createdAt.toDate().getTime() : JSONObject.NULL);
+            return obj;
+        } catch (Exception e) {
+            Log.e("SessionManager", "toJson", e);
+            return null;
         }
+    }
 
-        FirebaseSubscription toSubscription() {
-            Timestamp ts = createdAtMillis != null ? new Timestamp(new java.util.Date(createdAtMillis)) : null;
-            return new FirebaseSubscription(serviceName, cost, frequency, nextPaymentDate, isActive, ts);
+    private FirebaseSubscription fromJson(JSONObject obj) {
+        try {
+            String serviceName = obj.optString("serviceName", null);
+            double cost = obj.optDouble("cost", 0);
+            String frequency = obj.optString("frequency", null);
+            String nextDate = obj.optString("nextPaymentDate", null);
+            boolean isActive = obj.optBoolean("isActive", true);
+            long createdAt = obj.optLong("createdAt", -1);
+            Timestamp ts = createdAt > 0 ? new Timestamp(new java.util.Date(createdAt)) : null;
+            return new FirebaseSubscription(serviceName, cost, frequency, nextDate, isActive, ts);
+        } catch (Exception e) {
+            Log.e("SessionManager", "fromJson", e);
+            return null;
+        }
+    }
+
+    private void registerNetworkCallback() {
+        ConnectivityManager cm = (ConnectivityManager) appContext.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) return;
+        try {
+            cm.registerNetworkCallback(new NetworkRequest.Builder().build(), new ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(Network network) {
+                    // Firestore writes are executed only after connectivity is restored.
+                    syncPendingCloudSubscriptions();
+                }
+            });
+        } catch (Exception e) {
+            Log.w("SessionManager", "registerNetworkCallback", e);
         }
     }
 }

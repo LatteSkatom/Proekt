@@ -79,9 +79,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void refreshMode() {
         if (sessionManager.getMode() == SessionManager.Mode.CLOUD) {
-            attachListener();
-            mergePendingSubscriptions();
-            sessionManager.syncPendingCloudSubscriptions();
+            if (sessionManager.hasNetworkConnection()) {
+                attachListener();
+                mergePendingSubscriptions();
+                sessionManager.syncPendingCloudSubscriptions();
+            } else {
+                // Firestore listeners are not used while offline to avoid relying on its caching.
+                detachListener();
+                mergePendingSubscriptions();
+                adapter.notifyDataSetChanged();
+            }
         } else {
             detachListener();
             loadGuestSubscriptions();
@@ -90,7 +97,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void attachListener() {
         FirebaseUser user = sessionManager.getAuth().getCurrentUser();
-        if (user == null) return;
+        if (user == null || !sessionManager.hasNetworkConnection()) return;
         detachListener();
         subscriptionRegistration = sessionManager.getFirestore()
                 .collection("users")
