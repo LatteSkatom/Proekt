@@ -100,7 +100,6 @@
         android:layout_height="80dp"
         android:layout_marginTop="20dp"
         android:backgroundTint="#00F6F6F6"
-        android:text="Войти"
         android:textAllCaps="false"
         android:textColor="@color/white"
         app:layout_constraintEnd_toEndOf="@+id/imageView9"
@@ -132,24 +131,24 @@
         android:layout_width="200dp"
         android:layout_height="80dp"
         android:backgroundTint="#00F6F6F6"
-        android:text="Регистрация"
+
         android:textAllCaps="false"
         android:textColor="@color/white"
+        app:layout_constraintBottom_toBottomOf="@+id/imageView17"
         app:layout_constraintEnd_toEndOf="@+id/imageView9"
         app:layout_constraintStart_toStartOf="@+id/imageView9"
         app:layout_constraintTop_toTopOf="@+id/imageView17" />
 
     <Button
         android:id="@+id/google_button"
-        android:layout_width="200dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_width="97dp"
+        android:layout_height="47dp"
         android:backgroundTint="#00F6F6F6"
         android:text="Google"
         android:textAllCaps="false"
         android:textColor="@color/white"
-        app:layout_constraintTop_toBottomOf="@+id/register_button"
-        app:layout_constraintStart_toStartOf="@+id/register_button"
-        app:layout_constraintEnd_toEndOf="@+id/register_button" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/register_button"
+        app:layout_constraintTop_toBottomOf="@+id/login_button" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
