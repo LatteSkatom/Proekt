@@ -17,6 +17,7 @@ import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.firebase.auth.FirebaseAuthUserCollisionException;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -122,17 +123,31 @@ public class AuthManager {
         }
 
         firestore.collection("users").whereEqualTo("login", login).limit(1).get()
-                .addOnSuccessListener(snapshot -> {
-                    if (!snapshot.isEmpty()) {
+                .addOnSuccessListener(loginSnapshot -> {
+                    if (!loginSnapshot.isEmpty()) {
                         callback.onError("Логин занят");
                         return;
                     }
-                    auth.createUserWithEmailAndPassword(email, password)
-                            .addOnSuccessListener(result -> {
-                                FirebaseUser user = result.getUser();
-                                createUserIfMissing(user, login);
-                                sessionManager.enableCloudMode(user);
-                                callback.onSuccess();
+                    firestore.collection("users").whereEqualTo("email", email).limit(1).get()
+                            .addOnSuccessListener(emailSnapshot -> {
+                                if (!emailSnapshot.isEmpty()) {
+                                    callback.onError("Почта занята");
+                                    return;
+                                }
+                                auth.createUserWithEmailAndPassword(email, password)
+                                        .addOnSuccessListener(result -> {
+                                            FirebaseUser user = result.getUser();
+                                            createUserIfMissing(user, login);
+                                            sessionManager.enableCloudMode(user);
+                                            callback.onSuccess();
+                                        })
+                                        .addOnFailureListener(e -> {
+                                            if (e instanceof FirebaseAuthUserCollisionException) {
+                                                callback.onError("Почта занята");
+                                            } else {
+                                                callback.onError("Ошибка регистрации");
+                                            }
+                                        });
                             })
                             .addOnFailureListener(e -> callback.onError("Ошибка регистрации"));
                 })
