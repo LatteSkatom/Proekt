@@ -200,6 +200,41 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/textInputLayoutFrequency"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/field_spacing"
+            android:hint="Периодичность"
+            app:hintTextColor="@color/white"
+            app:boxBackgroundMode="none"
+            app:boxStrokeColor="@color/white"
+            app:boxStrokeWidth="0dp"
+            app:boxCornerRadiusTopStart="16dp"
+            app:boxCornerRadiusTopEnd="16dp"
+            app:boxCornerRadiusBottomStart="16dp"
+            app:boxCornerRadiusBottomEnd="16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/textInputLayoutCost">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/frequencyEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/edit_text_selector"
+                android:textColor="@color/white"
+                android:textColorHint="#B0B0B0"
+                android:textSize="16sp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="16dp"
+                android:minHeight="56dp"
+                android:hint="Например, MONTHLY" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
         <!-- Поле "Дата" -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/textInputLayoutDate"
@@ -217,7 +252,7 @@
             app:boxCornerRadiusBottomEnd="16dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/textInputLayoutCost">
+            app:layout_constraintTop_toBottomOf="@+id/textInputLayoutFrequency">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/editDate"
@@ -250,8 +285,18 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/textInputLayoutDate"
+            app:layout_constraintTop_toBottomOf="@+id/activeCheckBox"
             app:srcCompat="@drawable/savebuttonpng" />
+
+        <CheckBox
+            android:id="@+id/activeCheckBox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/field_spacing"
+            android:text="Активная подписка"
+            android:textColor="@color/white"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/textInputLayoutDate" />
 
 
     </androidx.constraintlayout.widget.ConstraintLayout>

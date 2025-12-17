@@ -3,7 +3,7 @@ package com.example.proekt;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
-import android.widget.Button;
+import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -27,17 +27,17 @@ public class AddActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_add);
+        setContentView(R.layout.add_sub);
 
         sessionManager = SessionManager.getInstance(this);
         firestore = sessionManager.getFirestore();
 
-        EditText serviceField = findViewById(R.id.serviceNameEditText);
-        EditText costField = findViewById(R.id.costEditText);
+        EditText serviceField = findViewById(R.id.editServiceName);
+        EditText costField = findViewById(R.id.editCost);
         EditText frequencyField = findViewById(R.id.frequencyEditText);
-        EditText nextPaymentField = findViewById(R.id.nextPaymentEditText);
+        EditText nextPaymentField = findViewById(R.id.editDate);
         CheckBox activeCheck = findViewById(R.id.activeCheckBox);
-        Button saveButton = findViewById(R.id.saveButton);
+        View saveButton = findViewById(R.id.save_button);
 
         saveButton.setOnClickListener(v -> {
             String serviceName = serviceField.getText().toString().trim();
