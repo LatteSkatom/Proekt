@@ -131,6 +131,12 @@ public class SessionManager {
             return;
         }
 
+        if (!hasNetworkConnection()) {
+            addPendingCloudSubscription(subscription);
+            callback.onSuccess(false);
+            return;
+        }
+
         Map<String, Object> data = buildFirestoreData(subscription);
         firestore.collection("users")
                 .document(user.getUid())
@@ -148,6 +154,13 @@ public class SessionManager {
             localSubscriptions.remove(position);
             persistLocalSubscriptions();
         }
+    }
+
+    private boolean hasNetworkConnection() {
+        android.net.ConnectivityManager cm = (android.net.ConnectivityManager) appContext.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) return false;
+        android.net.NetworkInfo networkInfo = cm.getActiveNetworkInfo();
+        return networkInfo != null && networkInfo.isConnected();
     }
 
     public void syncPendingCloudSubscriptions() {

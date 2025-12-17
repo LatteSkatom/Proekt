@@ -80,8 +80,7 @@ public class AddActivity extends AppCompatActivity {
 
             if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
                 sessionManager.addLocalSubscription(subscription);
-                setResult(RESULT_OK, new Intent());
-                finish();
+                completeAndReturn();
             } else {
                 FirebaseUser user = sessionManager.getAuth().getCurrentUser();
                 if (user == null) {
@@ -94,8 +93,7 @@ public class AddActivity extends AppCompatActivity {
                         if (!syncedImmediately) {
                             Toast.makeText(AddActivity.this, "Сохранено офлайн, синхронизируем при подключении", Toast.LENGTH_SHORT).show();
                         }
-                        setResult(RESULT_OK, new Intent());
-                        finish();
+                        completeAndReturn();
                     }
 
                     @Override
@@ -105,6 +103,12 @@ public class AddActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    private void completeAndReturn() {
+        setResult(RESULT_OK, new Intent());
+        startActivity(new Intent(AddActivity.this, MainActivity.class));
+        finish();
     }
 
     private void showDatePicker(EditText target) {
