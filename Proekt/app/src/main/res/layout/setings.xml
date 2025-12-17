@@ -83,37 +83,57 @@
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@drawable/setingsb" />
 
-    <com.google.android.material.imageview.ShapeableImageView
-        android:id="@+id/profile_image"
-        android:layout_width="96dp"
-        android:layout_height="96dp"
+    <androidx.cardview.widget.CardView
+        android:id="@+id/profile_card"
+        android:layout_width="160dp"
+        android:layout_height="150dp"
         android:layout_marginTop="24dp"
-        android:background="@drawable/avatar_placeholder"
-        android:scaleType="centerCrop"
+        android:background="@drawable/card_bg"
+        app:cardCornerRadius="12dp"
+        app:cardUseCompatPadding="true"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/imageView4"
-        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.None" />
+        app:layout_constraintTop_toBottomOf="@+id/imageView4">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/profile_image"
+            android:layout_width="104dp"
+            android:layout_height="104dp"
+            android:layout_gravity="center"
+            android:background="@drawable/circle_bg"
+            android:padding="6dp"
+            android:scaleType="centerCrop"
+            app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.Material3.Corner.Full" />
+    </androidx.cardview.widget.CardView>
 
     <Button
         android:id="@+id/pick_avatar_button"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_height="38dp"
         android:layout_marginTop="8dp"
+        android:background="@drawable/frame_butt"
+        android:paddingHorizontal="16dp"
         android:text="Сменить аватар"
-        app:layout_constraintEnd_toEndOf="@+id/profile_image"
-        app:layout_constraintStart_toStartOf="@+id/profile_image"
-        app:layout_constraintTop_toBottomOf="@+id/profile_image" />
+        android:textAllCaps="false"
+        android:textColor="@color/black"
+        android:textSize="14sp"
+        app:layout_constraintEnd_toEndOf="@+id/profile_card"
+        app:layout_constraintStart_toStartOf="@+id/profile_card"
+        app:layout_constraintTop_toBottomOf="@+id/profile_card" />
 
     <EditText
         android:id="@+id/name_edit_text"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:layout_marginStart="24dp"
         android:layout_marginEnd="24dp"
+        android:background="@drawable/edit_text_selector"
+        android:gravity="center_vertical"
         android:hint="Имя пользователя"
         android:inputType="textPersonName"
         android:maxLines="1"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
         app:layout_constraintEnd_toEndOf="@+id/imageView"
         app:layout_constraintStart_toStartOf="@+id/imageView"
         app:layout_constraintTop_toBottomOf="@+id/pick_avatar_button" />
@@ -132,14 +152,11 @@
 
     <com.google.android.material.imageview.ShapeableImageView
         android:id="@+id/action_button"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_marginStart="50dp"
-        android:layout_marginEnd="50dp"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_marginTop="12dp"
         android:scaleType="fitCenter"
-        app:layout_constraintBottom_toBottomOf="@+id/imageView"
         app:layout_constraintEnd_toEndOf="@+id/imageView"
-        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="@+id/imageView"
         app:layout_constraintTop_toBottomOf="@+id/save_button"
         app:srcCompat="@drawable/exitbutt" />
