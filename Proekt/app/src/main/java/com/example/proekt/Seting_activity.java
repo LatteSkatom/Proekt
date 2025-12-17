@@ -30,6 +30,7 @@ public class Seting_activity extends AppCompatActivity {
     private SessionManager sessionManager;
     private FirebaseFirestore firestore;
     private ShapeableImageView avatarView;
+    private ShapeableImageView actionButton;
     private Uri selectedImageUri;
 
     private final ActivityResultLauncher<Intent> pickImageLauncher = registerForActivityResult(
@@ -60,6 +61,7 @@ public class Seting_activity extends AppCompatActivity {
         firestore = sessionManager.getFirestore();
 
         avatarView = findViewById(R.id.profile_image);
+        actionButton = findViewById(R.id.action_button);
         EditText nameField = findViewById(R.id.name_edit_text);
         Button saveButton = findViewById(R.id.save_button);
         Button pickImageButton = findViewById(R.id.pick_avatar_button);
@@ -93,15 +95,8 @@ public class Seting_activity extends AppCompatActivity {
             }
         });
 
-        avatarView.setOnClickListener(v -> {
-            if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
-                loginLauncher.launch(new Intent(this, LoginActivity.class));
-            } else {
-                sessionManager.signOutToGuest();
-                Toast.makeText(this, "Вы вышли", Toast.LENGTH_SHORT).show();
-                updateUi();
-            }
-        });
+        avatarView.setOnClickListener(v -> handleAuthAction());
+        actionButton.setOnClickListener(v -> handleAuthAction());
 
         addButton.setOnClickListener(v -> startActivity(new Intent(this, AddActivity.class)));
         subButton.setOnClickListener(v -> startActivity(new Intent(this, MainActivity.class)));
@@ -110,9 +105,20 @@ public class Seting_activity extends AppCompatActivity {
         updateUi();
     }
 
+    private void handleAuthAction() {
+        if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
+            loginLauncher.launch(new Intent(this, LoginActivity.class));
+        } else {
+            sessionManager.signOutToGuest();
+            Toast.makeText(this, "Вы вышли", Toast.LENGTH_SHORT).show();
+            updateUi();
+        }
+    }
+
     private void updateUi() {
         if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
             avatarView.setImageResource(R.drawable.ic_login);
+            actionButton.setImageResource(R.drawable.enter_but);
         } else {
             FirebaseUser user = sessionManager.getAuth().getCurrentUser();
             if (user != null && user.getPhotoUrl() != null) {
@@ -120,6 +126,7 @@ public class Seting_activity extends AppCompatActivity {
             } else {
                 avatarView.setImageResource(R.drawable.avatar_placeholder);
             }
+            actionButton.setImageResource(R.drawable.exitbutt);
         }
     }
 
