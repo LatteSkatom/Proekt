@@ -85,7 +85,10 @@ public class MainActivity extends AppCompatActivity {
                 sessionManager.syncPendingCloudSubscriptions();
             } else {
                 // Firestore listeners are not used while offline to avoid relying on its caching.
+                // We rely solely on the locally persisted cache populated during the last
+                // online session; Firestore is not available after process death when offline.
                 detachListener();
+                loadCachedCloudSubscriptions();
                 mergePendingSubscriptions();
                 adapter.notifyDataSetChanged();
             }
@@ -118,6 +121,10 @@ public class MainActivity extends AppCompatActivity {
                             subscriptionIds.add(doc.getId());
                         }
                     }
+                    // Persist the last known online state locally. If the app is later started
+                    // without internet, Firestore will not be queried and this cache becomes the
+                    // source of truth until connectivity returns and a resync occurs.
+                    sessionManager.replaceLocalSubscriptions(new ArrayList<>(subscriptionList));
                     mergePendingSubscriptions();
                     adapter.notifyDataSetChanged();
                     scheduleNotifications(subscriptionList);
@@ -168,6 +175,9 @@ public class MainActivity extends AppCompatActivity {
             if (subscriptionId != null) {
                 subscriptionIds.remove(position);
             }
+            // Update local cache immediately so an offline restart reflects this deletion;
+            // Firestore will be updated once connectivity returns.
+            sessionManager.replaceLocalSubscriptions(new ArrayList<>(subscriptionList));
             adapter.notifyItemRemoved(position);
             cancelNotifications(java.util.Collections.singletonList(sub));
             Toast.makeText(this, "Удаление сохранено офлайн", Toast.LENGTH_SHORT).show();
@@ -180,6 +190,7 @@ public class MainActivity extends AppCompatActivity {
         if (subscriptionId == null) {
             sessionManager.queuePendingDeletion(null, sub);
             subscriptionList.remove(position);
+            sessionManager.replaceLocalSubscriptions(new ArrayList<>(subscriptionList));
             adapter.notifyItemRemoved(position);
             cancelNotifications(java.util.Collections.singletonList(sub));
             return;
@@ -286,6 +297,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadGuestSubscriptions() {
+        subscriptionList.clear();
+        subscriptionIds.clear();
+        subscriptionList.addAll(sessionManager.getLocalSubscriptions());
+        adapter.notifyDataSetChanged();
+        scheduleNotifications(subscriptionList);
+    }
+
+    private void loadCachedCloudSubscriptions() {
         subscriptionList.clear();
         subscriptionIds.clear();
         subscriptionList.addAll(sessionManager.getLocalSubscriptions());

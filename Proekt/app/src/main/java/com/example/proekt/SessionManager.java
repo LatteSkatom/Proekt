@@ -35,6 +35,10 @@ public class SessionManager {
     private final FirebaseAuth auth;
     private final FirebaseFirestore firestore;
     private final List<ListenerRegistration> listeners = new ArrayList<>();
+    // Acts as the offline cache of the latest known subscriptions (for guests and
+    // authenticated users). Firestore is *not* the source of truth while offline;
+    // this list is persisted to disk and reloaded on app restart when there is no
+    // connectivity.
     private final List<FirebaseSubscription> localSubscriptions = new ArrayList<>();
     private final List<FirebaseSubscription> pendingCloudSubscriptions = new ArrayList<>();
     private final List<String> pendingCloudDeletions = new ArrayList<>();
@@ -127,6 +131,19 @@ public class SessionManager {
         return new ArrayList<>(localSubscriptions);
     }
 
+    /**
+     * Replaces the locally cached subscriptions with the latest data that was
+     * fetched from Firestore while online. This guarantees the cache survives
+     * process death and is the only source used when the app restarts offline.
+     */
+    public void replaceLocalSubscriptions(List<FirebaseSubscription> subscriptions) {
+        localSubscriptions.clear();
+        if (subscriptions != null) {
+            localSubscriptions.addAll(subscriptions);
+        }
+        persistLocalSubscriptions();
+    }
+
     public void addLocalSubscription(FirebaseSubscription subscription) {
         if (subscription != null) {
             localSubscriptions.add(0, subscription);
@@ -159,7 +176,14 @@ public class SessionManager {
                 .document(user.getUid())
                 .collection("subscriptions")
                 .add(data)
-                .addOnSuccessListener(r -> callback.onSuccess(true))
+                .addOnSuccessListener(r -> {
+                    // Persist to local cache immediately so the item survives
+                    // app restarts even if the device later goes offline and
+                    // Firestore cannot be queried again until connectivity
+                    // returns.
+                    cacheLocalSubscription(subscription);
+                    callback.onSuccess(true);
+                })
                 .addOnFailureListener(e -> {
                     addPendingCloudSubscription(subscription);
                     callback.onSuccess(false);
@@ -345,6 +369,24 @@ public class SessionManager {
             pendingCloudSubscriptions.add(0, subscription);
             persistPendingCloudSubscriptions();
         }
+    }
+
+    /**
+     * Stores a subscription in the offline cache, removing any duplicate entry
+     * by content. This is used after confirmed online writes so the cache is
+     * immediately durable across restarts.
+     */
+    private void cacheLocalSubscription(FirebaseSubscription subscription) {
+        if (subscription == null) return;
+        Iterator<FirebaseSubscription> iterator = localSubscriptions.iterator();
+        while (iterator.hasNext()) {
+            if (sameSubscription(iterator.next(), subscription)) {
+                iterator.remove();
+                break;
+            }
+        }
+        localSubscriptions.add(0, subscription);
+        persistLocalSubscriptions();
     }
 
     private void removeMatchingPendingAdd(FirebaseSubscription subscription) {
