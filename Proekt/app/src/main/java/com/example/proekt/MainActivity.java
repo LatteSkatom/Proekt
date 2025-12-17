@@ -61,11 +61,7 @@ public class MainActivity extends AppCompatActivity {
 
         Button analitikButton = findViewById(R.id.Analit_button);
         analitikButton.setOnClickListener(v -> {
-            Intent intent = new Intent(this, AnalitikActivity.class);
-            if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
-                intent.putExtra("local_subscriptions", new ArrayList<>(sessionManager.getLocalSubscriptions()));
-            }
-            startActivity(intent);
+            startActivity(new Intent(this, AnalitikActivity.class));
         });
     }
 
