@@ -155,16 +155,6 @@ public class MainActivity extends AppCompatActivity {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(R.layout.dialog_confirm_subscription_delete);
 
-        Window window = dialog.getWindow();
-        if (window != null) {
-            window.setLayout(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            WindowManager.LayoutParams params = window.getAttributes();
-            params.gravity = Gravity.CENTER;
-            window.setDimAmount(0.6f);
-            window.setAttributes(params);
-        }
-
         TextView confirmationMessage = dialog.findViewById(R.id.delete_confirmation_message);
         TextView feedbackText = dialog.findViewById(R.id.delete_feedback_text);
         Button cancelButton = dialog.findViewById(R.id.cancel_delete_button);
@@ -177,6 +167,16 @@ public class MainActivity extends AppCompatActivity {
 
         dialog.setCancelable(true);
         dialog.show();
+
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setLayout(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            WindowManager.LayoutParams params = window.getAttributes();
+            params.gravity = Gravity.CENTER;
+            window.setDimAmount(0.6f);
+            window.setAttributes(params);
+        }
     }
 
     private void deleteSubscription(int position, Dialog dialog, TextView feedbackText) {
