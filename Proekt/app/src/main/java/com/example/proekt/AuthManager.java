@@ -83,46 +83,92 @@ public class AuthManager {
         }
     }
 
+// Replace ONLY the loginWithEmailOrLogin method in AuthManager
+// Firestore read access is assumed to be OPEN (test mode)
+
     public void loginWithEmailOrLogin(String emailOrLogin, String password, AuthCallback callback) {
         if (TextUtils.isEmpty(emailOrLogin) || TextUtils.isEmpty(password) || password.length() < 6) {
             callback.onError("Неверные данные");
             return;
         }
 
-        String sanitizedInput = emailOrLogin.trim();
-        String resolvedEmail;
-        String loginUsed = null;
+        String input = emailOrLogin.trim();
 
-        if (isEmail(sanitizedInput)) {
-            resolvedEmail = sanitizedInput;
-        } else {
-            loginUsed = sanitizedInput;
-            resolvedEmail = sessionManager.getCachedEmailForLogin(sanitizedInput);
-            if (TextUtils.isEmpty(resolvedEmail)) {
-                callback.onError("Не удалось найти почту для логина");
-                return;
-            }
+        // If input is an email → login directly
+        if (isEmail(input)) {
+            signInWithEmail(input, password, callback, null);
+            return;
         }
 
-        signInWithEmail(resolvedEmail, password, callback, loginUsed);
+        // Otherwise treat input as username → resolve via Firestore
+        String username = input;
+
+        firestore.collection("logins")
+                .document(username)
+                .get()
+                .addOnSuccessListener(loginSnap -> {
+                    if (!loginSnap.exists()) {
+                        callback.onError("Неверный логин или пароль");
+                        return;
+                    }
+
+                    String uid = loginSnap.getString("uid");
+                    if (TextUtils.isEmpty(uid)) {
+                        callback.onError("Ошибка входа");
+                        return;
+                    }
+
+                    firestore.collection("users")
+                            .document(uid)
+                            .get()
+                            .addOnSuccessListener(userSnap -> {
+                                if (!userSnap.exists()) {
+                                    callback.onError("Ошибка входа");
+                                    return;
+                                }
+
+                                String email = userSnap.getString("email");
+                                if (TextUtils.isEmpty(email)) {
+                                    callback.onError("Ошибка входа");
+                                    return;
+                                }
+
+                                // Login using resolved email
+                                signInWithEmail(email, password, callback, username);
+                            })
+                            .addOnFailureListener(e ->
+                                    callback.onError("Ошибка входа")
+                            );
+                })
+                .addOnFailureListener(e ->
+                        callback.onError("Ошибка входа")
+                );
     }
 
+    // signInWithEmail remains unchanged
     private void signInWithEmail(String email, String password, AuthCallback callback, String loginUsed) {
         if (TextUtils.isEmpty(email) || TextUtils.isEmpty(password)) {
             callback.onError("Неверные данные");
             return;
         }
+
         auth.signInWithEmailAndPassword(email, password)
                 .addOnSuccessListener(result -> {
                     FirebaseUser user = result.getUser();
                     sessionManager.enableCloudMode(user);
+
+                    // Optional cache for future offline use
                     if (!TextUtils.isEmpty(loginUsed)) {
                         sessionManager.cacheLoginEmail(loginUsed, email);
                     }
+
                     callback.onSuccess();
                 })
-                .addOnFailureListener(e -> callback.onError("Ошибка входа"));
+                .addOnFailureListener(e ->
+                        callback.onError("Неверный логин или пароль")
+                );
     }
+
 
     public void register(String email, String login, String password, String confirm, AuthCallback callback) {
         if (!isEmail(email) || TextUtils.isEmpty(login) || TextUtils.isEmpty(password) || !password.equals(confirm)) {
