@@ -1,16 +1,22 @@
 package com.example.proekt;
 
 import android.app.AlarmManager;
+import android.app.Dialog;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Gravity;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.Toast;
+import android.widget.TextView;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -79,7 +85,19 @@ public class MainActivity extends AppCompatActivity {
 
     private void refreshMode() {
         if (sessionManager.getMode() == SessionManager.Mode.CLOUD) {
-            attachListener();
+            if (sessionManager.hasNetworkConnection()) {
+                attachListener();
+                mergePendingSubscriptions();
+                sessionManager.syncPendingCloudSubscriptions();
+            } else {
+                // Firestore listeners are not used while offline to avoid relying on its caching.
+                // We rely solely on the locally persisted cache populated during the last
+                // online session; Firestore is not available after process death when offline.
+                detachListener();
+                loadCachedCloudSubscriptions();
+                mergePendingSubscriptions();
+                adapter.notifyDataSetChanged();
+            }
         } else {
             detachListener();
             loadGuestSubscriptions();
@@ -88,7 +106,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void attachListener() {
         FirebaseUser user = sessionManager.getAuth().getCurrentUser();
-        if (user == null) return;
+        if (user == null || !sessionManager.hasNetworkConnection()) return;
         detachListener();
         subscriptionRegistration = sessionManager.getFirestore()
                 .collection("users")
@@ -97,18 +115,20 @@ public class MainActivity extends AppCompatActivity {
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .addSnapshotListener((snapshot, e) -> {
                     if (e != null || snapshot == null) return;
-                    List<FirebaseSubscription> previous = new ArrayList<>(subscriptionList);
-                    cancelNotifications(previous);
-                    subscriptionList.clear();
-                    subscriptionIds.clear();
+                    List<FirebaseSubscription> cloudSubscriptions = new ArrayList<>();
                     for (DocumentSnapshot doc : snapshot.getDocuments()) {
                         FirebaseSubscription sub = doc.toObject(FirebaseSubscription.class);
                         if (sub != null) {
                             sub.id = doc.getId();
-                            subscriptionList.add(sub);
-                            subscriptionIds.add(doc.getId());
+                            cloudSubscriptions.add(sub);
                         }
                     }
+                    // Persist the last known online state locally. UI will be refreshed from
+                    // the cache to avoid rendering Firestore data directly, honoring the
+                    // offline-first deletion contract.
+                    sessionManager.replaceLocalSubscriptions(cloudSubscriptions);
+                    loadCachedCloudSubscriptions();
+                    mergePendingSubscriptions();
                     adapter.notifyDataSetChanged();
                     scheduleNotifications(subscriptionList);
                 });
@@ -127,33 +147,101 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onSubscriptionLongClick(FirebaseSubscription subscription, int position) {
-        new AlertDialog.Builder(this)
-                .setTitle("Удалить подписку")
-                .setMessage("Удалить \"" + subscription.serviceName + "\"?")
-                .setPositiveButton("Удалить", (d, w) -> deleteSubscription(position))
-                .setNegativeButton("Отмена", null)
-                .show();
+        showDeleteSubscriptionDialog(subscription, position);
     }
 
-    private void deleteSubscription(int position) {
-        if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
-            if (position >= 0 && position < subscriptionList.size()) {
-                FirebaseSubscription sub = subscriptionList.remove(position);
-                sessionManager.removeLocalSubscription(position);
-                adapter.notifyItemRemoved(position);
-                cancelNotifications(java.util.Collections.singletonList(sub));
-            }
+    private void showDeleteSubscriptionDialog(FirebaseSubscription subscription, int position) {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_confirm_subscription_delete);
+
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setLayout(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            WindowManager.LayoutParams params = window.getAttributes();
+            params.gravity = Gravity.CENTER;
+            window.setDimAmount(0.6f);
+            window.setAttributes(params);
+        }
+
+        TextView confirmationMessage = dialog.findViewById(R.id.delete_confirmation_message);
+        TextView feedbackText = dialog.findViewById(R.id.delete_feedback_text);
+        ShapeableImageView cancelButton = dialog.findViewById(R.id.cancel_delete_button);
+        ShapeableImageView confirmButton = dialog.findViewById(R.id.confirm_delete_button);
+
+        confirmationMessage.setText("Удалить \"" + subscription.serviceName + "\"?");
+
+        cancelButton.setOnClickListener(v -> dialog.dismiss());
+        confirmButton.setOnClickListener(v -> deleteSubscription(position, dialog, feedbackText));
+
+        dialog.setCancelable(true);
+        dialog.show();
+    }
+
+    private void deleteSubscription(int position, Dialog dialog, TextView feedbackText) {
+        boolean isGuest = sessionManager.getMode() == SessionManager.Mode.GUEST;
+        if (position < 0 || position >= subscriptionList.size()) return;
+
+        FirebaseSubscription sub = subscriptionList.get(position);
+
+        if (isGuest) {
+            sessionManager.removeLocalSubscription(position);
+            loadGuestSubscriptions();
+            cancelNotifications(java.util.Collections.singletonList(sub));
+            dismissWithFeedback(feedbackText, dialog, "Подписка удалена");
             return;
         }
+
+        String subscriptionId = sub.id;
+        boolean online = sessionManager.hasNetworkConnection();
+
+        // Remove from local cache immediately so the UI is always driven by local state
+        // and remains accurate after offline restarts. Firestore will be updated later.
+        sessionManager.removeLocalSubscriptionById(subscriptionId, sub);
+        sessionManager.queuePendingDeletion(subscriptionId, sub);
+        refreshLocalCloudList();
+        adapter.notifyDataSetChanged();
+        cancelNotifications(java.util.Collections.singletonList(sub));
+
+        if (!online) {
+            dismissWithFeedback(feedbackText, dialog, "Удаление сохранено офлайн");
+            return;
+        }
+
         FirebaseUser user = sessionManager.getAuth().getCurrentUser();
-        if (user == null || position < 0 || position >= subscriptionIds.size()) return;
+        if (user == null) return;
+
+        if (subscriptionId == null) {
+            // No Firestore id yet (likely a pending addition). Sync queue will skip it.
+            dismissWithFeedback(feedbackText, dialog, "Подписка удалена локально");
+            return;
+        }
+
         sessionManager.getFirestore()
                 .collection("users")
                 .document(user.getUid())
                 .collection("subscriptions")
-                .document(subscriptionIds.get(position))
+                .document(subscriptionId)
                 .delete()
-                .addOnFailureListener(e -> Toast.makeText(this, "Ошибка удаления", Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(v -> {
+                    // Remove from queue once the cloud deletion succeeds.
+                    sessionManager.markDeletionSynced(subscriptionId);
+                    sessionManager.syncPendingCloudSubscriptions();
+                    dismissWithFeedback(feedbackText, dialog, "Подписка удалена");
+                })
+                .addOnFailureListener(e -> {
+                    dismissWithFeedback(feedbackText, dialog, "Удаление будет выполнено после подключения");
+                });
+    }
+
+    private void dismissWithFeedback(TextView feedbackText, Dialog dialog, String message) {
+        if (feedbackText != null) {
+            feedbackText.setText(message);
+            feedbackText.postDelayed(dialog::dismiss, 600);
+            return;
+        }
+        dialog.dismiss();
     }
 
     private void scheduleNotifications(List<FirebaseSubscription> subscriptions) {
@@ -235,6 +323,8 @@ public class MainActivity extends AppCompatActivity {
             loadGuestSubscriptions();
         } else if (requestCode == LOGIN_REQUEST && resultCode == RESULT_OK) {
             refreshMode();
+        } else if (requestCode == ADD_REQUEST && resultCode == RESULT_OK) {
+            refreshMode();
         }
     }
 
@@ -242,7 +332,68 @@ public class MainActivity extends AppCompatActivity {
         subscriptionList.clear();
         subscriptionIds.clear();
         subscriptionList.addAll(sessionManager.getLocalSubscriptions());
+        for (FirebaseSubscription sub : subscriptionList) {
+            if (sub.id != null && !subscriptionIds.contains(sub.id)) {
+                subscriptionIds.add(sub.id);
+            }
+        }
         adapter.notifyDataSetChanged();
         scheduleNotifications(subscriptionList);
+    }
+
+    private void loadCachedCloudSubscriptions() {
+        subscriptionList.clear();
+        subscriptionIds.clear();
+        subscriptionList.addAll(sessionManager.getLocalSubscriptions());
+        for (FirebaseSubscription sub : subscriptionList) {
+            if (sub.id != null && !subscriptionIds.contains(sub.id)) {
+                subscriptionIds.add(sub.id);
+            }
+        }
+        adapter.notifyDataSetChanged();
+        scheduleNotifications(subscriptionList);
+    }
+
+    private void refreshLocalCloudList() {
+        subscriptionList.clear();
+        subscriptionIds.clear();
+        subscriptionList.addAll(sessionManager.getLocalSubscriptions());
+        for (FirebaseSubscription sub : subscriptionList) {
+            if (sub.id != null && !subscriptionIds.contains(sub.id)) {
+                subscriptionIds.add(sub.id);
+            }
+        }
+    }
+
+    private void mergePendingSubscriptions() {
+        List<FirebaseSubscription> pending = sessionManager.getPendingCloudSubscriptions();
+        if (pending.isEmpty()) return;
+
+        for (FirebaseSubscription pendingSub : pending) {
+            boolean alreadyPresent = false;
+            for (FirebaseSubscription existing : subscriptionList) {
+                if (sameSubscription(existing, pendingSub)) {
+                    alreadyPresent = true;
+                    break;
+                }
+            }
+            if (!alreadyPresent) {
+                subscriptionList.add(0, pendingSub);
+            }
+        }
+    }
+
+    private boolean sameSubscription(FirebaseSubscription a, FirebaseSubscription b) {
+        if (a == null || b == null) return false;
+        if (Double.compare(a.cost, b.cost) != 0) return false;
+        if (a.isActive != b.isActive) return false;
+        if (!safeEquals(a.serviceName, b.serviceName)) return false;
+        if (!safeEquals(a.frequency, b.frequency)) return false;
+        return safeEquals(a.nextPaymentDate, b.nextPaymentDate);
+    }
+
+    private boolean safeEquals(String a, String b) {
+        if (a == null) return b == null;
+        return a.equals(b);
     }
 }
