@@ -42,6 +42,7 @@ public class SessionManager {
     private final List<FirebaseSubscription> localSubscriptions = new ArrayList<>();
     private final List<FirebaseSubscription> pendingCloudSubscriptions = new ArrayList<>();
     private final List<String> pendingCloudDeletions = new ArrayList<>();
+    private final Map<String, String> loginEmailCache = new HashMap<>();
     private Mode mode = Mode.GUEST;
 
     private SessionManager(Context context) {
@@ -58,6 +59,7 @@ public class SessionManager {
         loadLocalSubscriptions();
         loadPendingCloudSubscriptions();
         loadPendingCloudDeletions();
+        loadLoginEmailCache();
         initializeMode();
         registerNetworkCallback();
     }
@@ -132,6 +134,29 @@ public class SessionManager {
         clearListeners();
         auth.signOut();
         enterGuestMode();
+    }
+
+    public String getCachedEmailForLogin(String login) {
+        if (login == null) return null;
+        String key = login.trim().toLowerCase();
+        return loginEmailCache.get(key);
+    }
+
+    public void cacheLoginEmail(String login, String email) {
+        if (login == null || email == null) return;
+        loginEmailCache.put(login.trim().toLowerCase(), email.trim());
+        persistLoginEmailCache();
+    }
+
+    public void updateCachedLogin(String oldLogin, String newLogin, String email) {
+        if (oldLogin != null) {
+            loginEmailCache.remove(oldLogin.trim().toLowerCase());
+        }
+        if (newLogin != null && email != null) {
+            cacheLoginEmail(newLogin, email);
+        } else {
+            persistLoginEmailCache();
+        }
     }
 
     public List<FirebaseSubscription> getLocalSubscriptions() {
@@ -406,6 +431,32 @@ public class SessionManager {
         } catch (Exception e) {
             Log.e("SessionManager", "loadPendingDeletions", e);
             prefs.edit().remove("pending_deletions").apply();
+        }
+    }
+
+    private void persistLoginEmailCache() {
+        try {
+            JSONObject object = new JSONObject();
+            for (Map.Entry<String, String> entry : loginEmailCache.entrySet()) {
+                object.put(entry.getKey(), entry.getValue());
+            }
+            prefs.edit().putString("login_email_cache", object.toString()).apply();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void loadLoginEmailCache() {
+        loginEmailCache.clear();
+        String raw = prefs.getString("login_email_cache", null);
+        if (raw == null) return;
+        try {
+            JSONObject object = new JSONObject(raw);
+            Iterator<String> keys = object.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                loginEmailCache.put(key, object.getString(key));
+            }
+        } catch (Exception ignored) {
         }
     }
 
