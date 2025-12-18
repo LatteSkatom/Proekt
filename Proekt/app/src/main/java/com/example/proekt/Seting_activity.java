@@ -29,8 +29,11 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.EmailAuthProvider;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.WriteBatch;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
@@ -284,11 +287,24 @@ public class Seting_activity extends AppCompatActivity {
             return;
         }
 
-        Map<String, Object> data = new HashMap<>();
-        data.put("login", newLogin);
-        data.put("updatedAt", FieldValue.serverTimestamp());
+        String uid = user.getUid();
+        WriteBatch batch = firestore.batch();
+        DocumentReference userRef = firestore.collection("users").document(uid);
 
-        firestore.collection("users").document(user.getUid()).update(data)
+        Map<String, Object> userUpdate = new HashMap<>();
+        userUpdate.put("login", newLogin);
+        userUpdate.put("updatedAt", FieldValue.serverTimestamp());
+        batch.update(userRef, userUpdate);
+
+        if (currentLogin != null && !currentLogin.isEmpty()) {
+            batch.delete(firestore.collection("logins").document(currentLogin));
+        }
+
+        Map<String, Object> loginData = new HashMap<>();
+        loginData.put("uid", uid);
+        batch.set(firestore.collection("logins").document(newLogin), loginData);
+
+        batch.commit()
                 .addOnSuccessListener(unused -> {
                     currentLogin = newLogin;
                     dialogLogin.setText(newLogin);
@@ -298,12 +314,17 @@ public class Seting_activity extends AppCompatActivity {
                         loginFeedbackText.setTextColor(ContextCompat.getColor(this, R.color.black));
                     }
                     if (selectedImageUri != null) {
-                        uploadAvatar(user.getUid(), selectedImageUri);
+                        uploadAvatar(uid, selectedImageUri);
                     }
                 })
                 .addOnFailureListener(e -> {
                     if (loginFeedbackText != null) {
-                        loginFeedbackText.setText("Не удалось сохранить профиль");
+                        if (e instanceof FirebaseFirestoreException &&
+                                ((FirebaseFirestoreException) e).getCode() == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                            loginFeedbackText.setText("Логин занят");
+                        } else {
+                            loginFeedbackText.setText("Не удалось сохранить профиль");
+                        }
                         loginFeedbackText.setTextColor(ContextCompat.getColor(this, R.color.black));
                     }
                 });

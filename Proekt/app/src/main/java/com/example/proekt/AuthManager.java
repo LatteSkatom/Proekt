@@ -15,16 +15,20 @@ import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthUserCollisionException;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
-import com.google.firebase.auth.FirebaseAuthUserCollisionException;
 import com.google.firebase.firestore.DocumentReference;
-import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.WriteBatch;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -84,33 +88,8 @@ public class AuthManager {
             callback.onError("Неверные данные");
             return;
         }
-        if (isEmail(emailOrLogin)) {
-            signInWithEmail(emailOrLogin, password, callback);
-        } else {
-            firestore.collection("logins")
-                    .document(emailOrLogin)
-                    .get()
-                    .addOnSuccessListener(doc -> {
-                        if (!doc.exists()) {
-                            callback.onError("Логин не найден");
-                            return;
-                        }
-                        String uid = doc.getString("uid");
-                        firestore.collection("users")
-                                .document(uid)
-                                .get()
-                                .addOnSuccessListener(userDoc -> {
-                                    String email = userDoc.getString("email");
-                                    if (TextUtils.isEmpty(email)) {
-                                        callback.onError("Ошибка входа");
-                                        return;
-                                    }
-                                    signInWithEmail(email, password, callback);
-                                })
-                                .addOnFailureListener(e -> callback.onError("Ошибка входа"));
-                    })
-                    .addOnFailureListener(e -> callback.onError("Ошибка входа"));
-        }
+
+        signInWithEmail(emailOrLogin, password, callback);
     }
 
     private void signInWithEmail(String email, String password, AuthCallback callback) {
@@ -133,55 +112,57 @@ public class AuthManager {
             return;
         }
 
-        firestore.collection("logins")
-                .document(login)
-                .get()
-                .addOnSuccessListener(doc -> {
-                    if (doc.exists()) {
-                        callback.onError("Логин занят");
+        auth.createUserWithEmailAndPassword(email, password)
+                .addOnSuccessListener(result -> {
+                    FirebaseUser user = result.getUser();
+                    if (user == null) {
+                        callback.onError("Ошибка регистрации");
                         return;
                     }
 
-                    auth.createUserWithEmailAndPassword(email, password)
-                            .addOnSuccessListener(result -> {
-                                FirebaseUser user = result.getUser();
-                                if (user == null) {
-                                    callback.onError("Ошибка регистрации");
-                                    return;
-                                }
+                    String uid = user.getUid();
+                    WriteBatch batch = firestore.batch();
 
-                                String uid = user.getUid();
-                                Map<String, Object> loginData = new HashMap<>();
-                                loginData.put("uid", uid);
+                    DocumentReference userRef = firestore.collection("users").document(uid);
+                    Map<String, Object> userData = new HashMap<>();
+                    userData.put("email", email);
+                    userData.put("login", login);
+                    userData.put("name", user.getDisplayName() != null ? user.getDisplayName() : login);
+                    userData.put("avatarUrl", null);
+                    userData.put("createdAt", FieldValue.serverTimestamp());
+                    batch.set(userRef, userData);
 
-                                firestore.runTransaction(transaction -> {
-                                            DocumentReference loginRef = firestore.collection("logins").document(login);
-                                            DocumentSnapshot snapshot = transaction.get(loginRef);
-                                            if (snapshot.exists()) {
-                                                throw new FirebaseFirestoreException("Login exists", FirebaseFirestoreException.Code.ABORTED);
-                                            }
-                                            transaction.set(loginRef, loginData);
-                                            return null;
-                                        })
-                                        .addOnSuccessListener(aVoid -> {
-                                            createUserIfMissing(user, login);
-                                            sessionManager.enableCloudMode(user);
-                                            callback.onSuccess();
-                                        })
-                                        .addOnFailureListener(e -> {
-                                            user.delete();
-                                            callback.onError("Логин занят");
-                                        });
+                    Map<String, Object> loginData = new HashMap<>();
+                    loginData.put("uid", uid);
+                    batch.set(firestore.collection("logins").document(login), loginData);
+
+                    String emailHash = hashEmail(email);
+                    Map<String, Object> emailData = new HashMap<>();
+                    emailData.put("uid", uid);
+                    batch.set(firestore.collection("emails").document(emailHash), emailData);
+
+                    batch.commit()
+                            .addOnSuccessListener(unused -> {
+                                sessionManager.enableCloudMode(user);
+                                callback.onSuccess();
                             })
                             .addOnFailureListener(e -> {
-                                if (e instanceof FirebaseAuthUserCollisionException) {
-                                    callback.onError("Почта занята");
+                                user.delete();
+                                if (e instanceof FirebaseFirestoreException
+                                        && ((FirebaseFirestoreException) e).getCode() == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                                    callback.onError("Логин или почта заняты");
                                 } else {
                                     callback.onError("Ошибка регистрации");
                                 }
                             });
                 })
-                .addOnFailureListener(e -> callback.onError("Ошибка регистрации"));
+                .addOnFailureListener(e -> {
+                    if (e instanceof FirebaseAuthUserCollisionException) {
+                        callback.onError("Почта занята");
+                    } else {
+                        callback.onError("Ошибка регистрации");
+                    }
+                });
     }
 
     public void signOut() {
@@ -208,6 +189,23 @@ public class AuthManager {
 
     private boolean isEmail(String value) {
         return !TextUtils.isEmpty(value) && Pattern.compile("^[A-Za-z0-9+_.-]+@(.+)$").matcher(value).matches();
+    }
+
+    private String hashEmail(String email) {
+        String normalized = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(normalized.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            return String.valueOf(normalized.hashCode());
+        }
     }
 
     public interface AuthCallback {
