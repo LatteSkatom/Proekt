@@ -80,8 +80,8 @@ public class Seting_activity extends AppCompatActivity {
         avatarView = findViewById(R.id.profile_image);
         actionButton = findViewById(R.id.action_button);
         loginValue = findViewById(R.id.login_value);
-        Button pickImageButton = findViewById(R.id.pick_avatar_button);
-        Button profileMenuButton = findViewById(R.id.profile_menu_button);
+        ShapeableImageView pickImageButton = findViewById(R.id.pick_avatar_button);
+        ShapeableImageView profileMenuButton = findViewById(R.id.profile_menu_button);
         Button addButton = findViewById(R.id.add_button);
         Button subButton = findViewById(R.id.sub_button);
         Button analyticsButton = findViewById(R.id.Analit_button);
@@ -179,14 +179,14 @@ public class Seting_activity extends AppCompatActivity {
         TextView dialogLogin = dialog.findViewById(R.id.dialog_login_value);
         TextInputEditText dialogLoginInput = dialog.findViewById(R.id.dialog_login_input);
         TextView loginFeedbackText = dialog.findViewById(R.id.login_feedback_text);
-        Button saveProfileButton = dialog.findViewById(R.id.dialog_save_profile_button);
-        Button changePasswordButton = dialog.findViewById(R.id.dialog_change_password_button);
+        ShapeableImageView saveProfileButton = dialog.findViewById(R.id.dialog_save_profile_button);
+        ShapeableImageView changePasswordButton = dialog.findViewById(R.id.dialog_change_password_button);
         View passwordFields = dialog.findViewById(R.id.password_fields_container);
         TextInputEditText oldPasswordInput = dialog.findViewById(R.id.old_password_input);
         TextInputEditText newPasswordInput = dialog.findViewById(R.id.new_password_input);
         TextInputEditText confirmPasswordInput = dialog.findViewById(R.id.confirm_password_input);
         Button submitPasswordButton = dialog.findViewById(R.id.submit_password_button);
-        Button closeButton = dialog.findViewById(R.id.close_menu_button);
+        ShapeableImageView closeButton = dialog.findViewById(R.id.close_menu_button);
 
         if (user.getPhotoUrl() != null) {
             Glide.with(this).load(user.getPhotoUrl()).into(dialogAvatar);

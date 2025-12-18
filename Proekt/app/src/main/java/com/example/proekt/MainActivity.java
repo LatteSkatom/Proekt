@@ -167,8 +167,8 @@ public class MainActivity extends AppCompatActivity {
 
         TextView confirmationMessage = dialog.findViewById(R.id.delete_confirmation_message);
         TextView feedbackText = dialog.findViewById(R.id.delete_feedback_text);
-        Button cancelButton = dialog.findViewById(R.id.cancel_delete_button);
-        Button confirmButton = dialog.findViewById(R.id.confirm_delete_button);
+        ShapeableImageView cancelButton = dialog.findViewById(R.id.cancel_delete_button);
+        ShapeableImageView confirmButton = dialog.findViewById(R.id.confirm_delete_button);
 
         confirmationMessage.setText("Удалить \"" + subscription.serviceName + "\"?");
 
