@@ -34,9 +34,10 @@ import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.WriteBatch;
-import com.google.firebase.storage.FirebaseStorage;
-import com.google.firebase.storage.StorageReference;
-
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -134,11 +135,7 @@ public class Seting_activity extends AppCompatActivity {
         } else {
             FirebaseUser user = sessionManager.getAuth().getCurrentUser();
             if (user != null) {
-                if (user.getPhotoUrl() != null) {
-                    Glide.with(this).load(user.getPhotoUrl()).into(avatarView);
-                } else {
-                    avatarView.setImageResource(R.drawable.avatar_placeholder);
-                }
+                loadAvatar(user, avatarView);
                 loadProfile(user.getUid());
             }
             actionButton.setImageResource(R.drawable.exitbutt);
@@ -188,11 +185,7 @@ public class Seting_activity extends AppCompatActivity {
         Button submitPasswordButton = dialog.findViewById(R.id.submit_password_button);
         ShapeableImageView closeButton = dialog.findViewById(R.id.close_menu_button);
 
-        if (user.getPhotoUrl() != null) {
-            Glide.with(this).load(user.getPhotoUrl()).into(dialogAvatar);
-        } else {
-            dialogAvatar.setImageResource(R.drawable.avatar_placeholder);
-        }
+        loadAvatar(user, dialogAvatar);
 
         String initialLogin = currentLogin != null ? currentLogin : (user.getEmail() != null ? user.getEmail() : "");
         dialogLogin.setText(initialLogin);
@@ -317,7 +310,7 @@ public class Seting_activity extends AppCompatActivity {
                         loginFeedbackText.setTextColor(ContextCompat.getColor(this, R.color.black));
                     }
                     if (selectedImageUri != null) {
-                        uploadAvatar(uid, selectedImageUri);
+                        saveAvatarLocally(uid, selectedImageUri);
                     }
                 })
                 .addOnFailureListener(e -> {
@@ -333,11 +326,44 @@ public class Seting_activity extends AppCompatActivity {
                 });
     }
 
-    private void uploadAvatar(String uid, Uri uri) {
-        StorageReference ref = FirebaseStorage.getInstance().getReference().child("avatars/" + uid + ".jpg");
-        ref.putFile(uri).continueWithTask(task -> ref.getDownloadUrl())
-                .addOnSuccessListener(downloadUri -> firestore.collection("users").document(uid)
-                        .update("avatarUrl", downloadUri.toString()))
-                .addOnFailureListener(e -> Toast.makeText(this, "Ошибка загрузки", Toast.LENGTH_SHORT).show());
+    private void loadAvatar(FirebaseUser user, ShapeableImageView target) {
+        File avatarFile = getAvatarFile(user.getUid());
+        if (avatarFile.exists()) {
+            Glide.with(this).load(avatarFile).into(target);
+        } else if (user.getPhotoUrl() != null) {
+            Glide.with(this).load(user.getPhotoUrl()).into(target);
+        } else {
+            target.setImageResource(R.drawable.avatar_placeholder);
+        }
+    }
+
+    private File getAvatarFile(String uid) {
+        File avatarDir = new File(getFilesDir(), "avatars");
+        if (!avatarDir.exists()) {
+            avatarDir.mkdirs();
+        }
+        return new File(avatarDir, uid + ".jpg");
+    }
+
+    private void saveAvatarLocally(String uid, Uri uri) {
+        File avatarFile = getAvatarFile(uid);
+        try (InputStream inputStream = getContentResolver().openInputStream(uri);
+             FileOutputStream outputStream = new FileOutputStream(avatarFile)) {
+            if (inputStream == null) {
+                Toast.makeText(this, "Не удалось открыть изображение", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+
+            Glide.with(this).load(avatarFile).into(avatarView);
+            Toast.makeText(this, "Аватар сохранен на устройстве", Toast.LENGTH_SHORT).show();
+        } catch (IOException e) {
+            Toast.makeText(this, "Не удалось сохранить аватар", Toast.LENGTH_SHORT).show();
+        }
     }
 }
