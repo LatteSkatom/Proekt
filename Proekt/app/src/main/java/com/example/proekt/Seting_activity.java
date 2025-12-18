@@ -1,10 +1,18 @@
 package com.example.proekt;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -16,15 +24,13 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.bumptech.glide.Glide;
-import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.imageview.ShapeableImageView;
 import com.google.android.material.textfield.TextInputEditText;
+import com.google.firebase.auth.AuthCredential;
+import com.google.firebase.auth.EmailAuthProvider;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.FirebaseFirestoreException;
-import com.google.firebase.firestore.DocumentReference;
-import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
@@ -75,7 +81,7 @@ public class Seting_activity extends AppCompatActivity {
         loginValue = findViewById(R.id.login_value);
         Button saveButton = findViewById(R.id.save_button);
         Button pickImageButton = findViewById(R.id.pick_avatar_button);
-        Button changeLoginButton = findViewById(R.id.change_login_button);
+        Button profileMenuButton = findViewById(R.id.profile_menu_button);
         Button addButton = findViewById(R.id.add_button);
         Button subButton = findViewById(R.id.sub_button);
         Button analyticsButton = findViewById(R.id.Analit_button);
@@ -112,12 +118,12 @@ public class Seting_activity extends AppCompatActivity {
         });
         actionButton.setOnClickListener(v -> handleAuthAction());
 
-        changeLoginButton.setOnClickListener(v -> {
+        profileMenuButton.setOnClickListener(v -> {
             if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
-                Toast.makeText(this, "Войдите, чтобы менять логин", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Войдите, чтобы открыть меню профиля", Toast.LENGTH_SHORT).show();
                 return;
             }
-            showChangeLoginDialog();
+            showProfileMenuDialog();
         });
 
         addButton.setOnClickListener(v -> startActivity(new Intent(this, AddActivity.class)));
@@ -170,93 +176,97 @@ public class Seting_activity extends AppCompatActivity {
                 .addOnFailureListener(e -> loginValue.setText(currentLogin != null ? currentLogin : ""));
     }
 
-    private void showChangeLoginDialog() {
+    private void showProfileMenuDialog() {
         FirebaseUser user = sessionManager.getAuth().getCurrentUser();
         if (user == null) return;
 
-        BottomSheetDialog dialog = new BottomSheetDialog(this);
-        dialog.setContentView(R.layout.dialog_change_login);
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_profile_menu);
 
-        TextInputEditText loginInput = dialog.findViewById(R.id.new_login_input);
-        Button confirmButton = dialog.findViewById(R.id.confirm_login_button);
-        Button cancelButton = dialog.findViewById(R.id.cancel_login_button);
-
-        if (cancelButton != null) {
-            cancelButton.setOnClickListener(v -> dialog.dismiss());
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setLayout(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            WindowManager.LayoutParams params = window.getAttributes();
+            params.gravity = Gravity.CENTER;
+            // Outside area stays semi-transparent to keep focus on the centered menu.
+            window.setDimAmount(0.6f);
+            window.setAttributes(params);
         }
 
-        if (confirmButton != null) {
-            confirmButton.setOnClickListener(v -> {
-                if (loginInput == null) return;
-                String newLogin = loginInput.getText() != null ? loginInput.getText().toString().trim() : "";
-                if (!isLoginValid(newLogin)) {
-                    loginInput.setError("Используйте 3-20 символов: буквы, цифры, .-_");
-                    return;
-                }
-                if (newLogin.equals(currentLogin)) {
-                    dialog.dismiss();
-                    return;
-                }
-                if (!sessionManager.hasNetworkConnection()) {
-                    Toast.makeText(this, "Нужен интернет для смены логина", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                checkAndApplyLogin(user, newLogin, loginInput, dialog);
-            });
+        ShapeableImageView dialogAvatar = dialog.findViewById(R.id.dialog_avatar);
+        TextView dialogLogin = dialog.findViewById(R.id.dialog_login_value);
+        Button changePasswordButton = dialog.findViewById(R.id.dialog_change_password_button);
+        View passwordFields = dialog.findViewById(R.id.password_fields_container);
+        TextInputEditText oldPasswordInput = dialog.findViewById(R.id.old_password_input);
+        TextInputEditText newPasswordInput = dialog.findViewById(R.id.new_password_input);
+        TextInputEditText confirmPasswordInput = dialog.findViewById(R.id.confirm_password_input);
+        Button submitPasswordButton = dialog.findViewById(R.id.submit_password_button);
+        Button closeButton = dialog.findViewById(R.id.close_menu_button);
+
+        if (user.getPhotoUrl() != null) {
+            Glide.with(this).load(user.getPhotoUrl()).into(dialogAvatar);
+        } else {
+            dialogAvatar.setImageResource(R.drawable.avatar_placeholder);
         }
 
+        dialogLogin.setText(currentLogin != null ? currentLogin : (user.getEmail() != null ? user.getEmail() : ""));
+
+        changePasswordButton.setOnClickListener(v -> {
+            // The menu replaces previous scattered buttons so account actions live in one focused, centered surface.
+            passwordFields.setVisibility(View.VISIBLE);
+        });
+
+        submitPasswordButton.setOnClickListener(v -> handlePasswordChange(user, oldPasswordInput, newPasswordInput, confirmPasswordInput, dialog));
+        closeButton.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.setCancelable(true);
         dialog.show();
     }
 
-    private boolean isLoginValid(String value) {
-        return value != null && value.matches("[A-Za-z0-9._-]{3,20}");
-    }
+    private void handlePasswordChange(FirebaseUser user, TextInputEditText oldPasswordInput, TextInputEditText newPasswordInput, TextInputEditText confirmPasswordInput, Dialog dialog) {
+        String oldPassword = oldPasswordInput.getText() != null ? oldPasswordInput.getText().toString().trim() : "";
+        String newPassword = newPasswordInput.getText() != null ? newPasswordInput.getText().toString().trim() : "";
+        String confirmPassword = confirmPasswordInput.getText() != null ? confirmPasswordInput.getText().toString().trim() : "";
 
-    private void checkAndApplyLogin(FirebaseUser user, String newLogin, TextInputEditText loginInput, BottomSheetDialog dialog) {
-        firestore.collection("logins")
-                .document(newLogin)
-                .get()
-                .addOnSuccessListener(snapshot -> {
-                    if (snapshot.exists()) {
-                        loginInput.setError("Логин занят");
-                        return;
-                    }
-                    updateLoginMapping(user, newLogin, dialog);
-                })
-                .addOnFailureListener(e -> Toast.makeText(this, "Ошибка проверки логина", Toast.LENGTH_SHORT).show());
-    }
+        boolean hasError = false;
+        if (oldPassword.isEmpty()) {
+            oldPasswordInput.setError("Введите текущий пароль");
+            hasError = true;
+        }
+        if (newPassword.length() < 6) {
+            newPasswordInput.setError("Минимум 6 символов");
+            hasError = true;
+        }
+        if (!newPassword.equals(confirmPassword)) {
+            confirmPasswordInput.setError("Пароли не совпадают");
+            hasError = true;
+        }
+        if (hasError) {
+            return;
+        }
 
-    private void updateLoginMapping(FirebaseUser user, String newLogin, BottomSheetDialog dialog) {
-        // Login is editable (and separate from immutable email) so users can keep their email private
-        // while changing how they are displayed. We atomically swap logins to preserve uniqueness.
-        firestore.runTransaction(transaction -> {
-                    DocumentReference newLoginRef = firestore.collection("logins").document(newLogin);
-                    DocumentReference userRef = firestore.collection("users").document(user.getUid());
-                    DocumentReference oldLoginRef = currentLogin != null ? firestore.collection("logins").document(currentLogin) : null;
+        String email = user.getEmail();
+        if (email == null || email.isEmpty()) {
+            Toast.makeText(this, "Нельзя сменить пароль без почты", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-                    DocumentSnapshot snapshot = transaction.get(newLoginRef);
-                    if (snapshot.exists()) {
-                        throw new FirebaseFirestoreException("Login exists", FirebaseFirestoreException.Code.ABORTED);
-                    }
-
-                    Map<String, Object> loginData = new HashMap<>();
-                    loginData.put("uid", user.getUid());
-
-                    transaction.set(newLoginRef, loginData);
-                    transaction.update(userRef, "login", newLogin);
-                    if (oldLoginRef != null) {
-                        transaction.delete(oldLoginRef);
-                    }
-                    return null;
-                })
+        AuthCredential credential = EmailAuthProvider.getCredential(email, oldPassword);
+        user.reauthenticate(credential)
                 .addOnSuccessListener(aVoid -> {
-                    currentLogin = newLogin;
-                    loginValue.setText(newLogin);
-                    Toast.makeText(this, "Логин обновлен", Toast.LENGTH_SHORT).show();
-                    dialog.dismiss();
+                    // Firebase requires recent reauthentication before sensitive actions like password updates.
+                    user.updatePassword(newPassword)
+                            .addOnSuccessListener(unused -> {
+                                Toast.makeText(this, "Пароль обновлен", Toast.LENGTH_SHORT).show();
+                                dialog.dismiss();
+                            })
+                            .addOnFailureListener(e -> Toast.makeText(this, "Не удалось обновить пароль", Toast.LENGTH_SHORT).show());
                 })
                 .addOnFailureListener(e -> {
-                    Toast.makeText(this, "Не удалось обновить логин", Toast.LENGTH_SHORT).show();
+                    oldPasswordInput.setError("Неверный текущий пароль");
+                    Toast.makeText(this, "Не удалось подтвердить личность", Toast.LENGTH_SHORT).show();
                 });
     }
 
