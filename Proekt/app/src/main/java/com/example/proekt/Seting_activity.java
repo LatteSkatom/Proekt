@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat;
 
 import com.bumptech.glide.Glide;
 import com.google.android.material.imageview.ShapeableImageView;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.EmailAuthProvider;
@@ -57,6 +58,12 @@ public class Seting_activity extends AppCompatActivity {
                     selectedImageUri = result.getData().getData();
                     if (selectedImageUri != null) {
                         Glide.with(this).load(selectedImageUri).into(avatarView);
+                        FirebaseUser user = sessionManager.getAuth().getCurrentUser();
+                        if (user != null) {
+                            saveAvatarLocally(user.getUid(), selectedImageUri);
+                        } else {
+                            Toast.makeText(this, "Войдите, чтобы сохранить аватар", Toast.LENGTH_SHORT).show();
+                        }
                     }
                 }
             }
@@ -176,6 +183,7 @@ public class Seting_activity extends AppCompatActivity {
         TextView dialogLogin = dialog.findViewById(R.id.dialog_login_value);
         TextInputEditText dialogLoginInput = dialog.findViewById(R.id.dialog_login_input);
         TextView loginFeedbackText = dialog.findViewById(R.id.login_feedback_text);
+        MaterialButton toggleLoginButton = dialog.findViewById(R.id.dialog_login_toggle_button);
         ShapeableImageView saveProfileButton = dialog.findViewById(R.id.dialog_save_profile_button);
         ShapeableImageView changePasswordButton = dialog.findViewById(R.id.dialog_change_password_button);
         View passwordFields = dialog.findViewById(R.id.password_fields_container);
@@ -197,6 +205,8 @@ public class Seting_activity extends AppCompatActivity {
             // The menu replaces previous scattered buttons so account actions live in one focused, centered surface.
             passwordFields.setVisibility(View.VISIBLE);
         });
+
+        toggleLoginButton.setOnClickListener(v -> toggleLoginSection(dialog));
 
         saveProfileButton.setOnClickListener(v -> {
             String newLogin = dialogLoginInput != null && dialogLoginInput.getText() != null
@@ -309,9 +319,6 @@ public class Seting_activity extends AppCompatActivity {
                         loginFeedbackText.setText("Профиль сохранен");
                         loginFeedbackText.setTextColor(ContextCompat.getColor(this, R.color.black));
                     }
-                    if (selectedImageUri != null) {
-                        saveAvatarLocally(uid, selectedImageUri);
-                    }
                 })
                 .addOnFailureListener(e -> {
                     if (loginFeedbackText != null) {
@@ -364,6 +371,29 @@ public class Seting_activity extends AppCompatActivity {
             Toast.makeText(this, "Аватар сохранен на устройстве", Toast.LENGTH_SHORT).show();
         } catch (IOException e) {
             Toast.makeText(this, "Не удалось сохранить аватар", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void toggleLoginSection(Dialog dialog) {
+        View loginSection = dialog.findViewById(R.id.login_section_container);
+        if (loginSection == null) return;
+
+        if (loginSection.getVisibility() == View.VISIBLE) {
+            loginSection.animate()
+                    .alpha(0f)
+                    .setDuration(150)
+                    .withEndAction(() -> {
+                        loginSection.setVisibility(View.GONE);
+                        loginSection.setAlpha(1f);
+                    })
+                    .start();
+        } else {
+            loginSection.setAlpha(0f);
+            loginSection.setVisibility(View.VISIBLE);
+            loginSection.animate()
+                    .alpha(1f)
+                    .setDuration(200)
+                    .start();
         }
     }
 }
