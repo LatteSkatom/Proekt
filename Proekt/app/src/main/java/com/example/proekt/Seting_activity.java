@@ -24,6 +24,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.signature.ObjectKey;
 import com.google.android.material.imageview.ShapeableImageView;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
@@ -336,7 +337,11 @@ public class Seting_activity extends AppCompatActivity {
     private void loadAvatar(FirebaseUser user, ShapeableImageView target) {
         File avatarFile = getAvatarFile(user.getUid());
         if (avatarFile.exists()) {
-            Glide.with(this).load(avatarFile).into(target);
+            Glide.with(this)
+                    .load(avatarFile)
+                    .signature(new ObjectKey(avatarFile.lastModified()))
+                    .skipMemoryCache(true)
+                    .into(target);
         } else if (user.getPhotoUrl() != null) {
             Glide.with(this).load(user.getPhotoUrl()).into(target);
         } else {
@@ -367,7 +372,11 @@ public class Seting_activity extends AppCompatActivity {
                 outputStream.write(buffer, 0, bytesRead);
             }
 
-            Glide.with(this).load(avatarFile).into(avatarView);
+            Glide.with(this)
+                    .load(avatarFile)
+                    .signature(new ObjectKey(avatarFile.lastModified()))
+                    .skipMemoryCache(true)
+                    .into(avatarView);
             Toast.makeText(this, "Аватар сохранен на устройстве", Toast.LENGTH_SHORT).show();
         } catch (IOException e) {
             Toast.makeText(this, "Не удалось сохранить аватар", Toast.LENGTH_SHORT).show();
