@@ -14,7 +14,6 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -22,6 +21,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 import com.bumptech.glide.Glide;
 import com.google.android.material.imageview.ShapeableImageView;
@@ -45,7 +45,6 @@ public class Seting_activity extends AppCompatActivity {
     private ShapeableImageView actionButton;
     private Uri selectedImageUri;
     private TextView loginValue;
-    private EditText nameField;
     private String currentLogin;
 
     private final ActivityResultLauncher<Intent> pickImageLauncher = registerForActivityResult(
@@ -77,9 +76,7 @@ public class Seting_activity extends AppCompatActivity {
 
         avatarView = findViewById(R.id.profile_image);
         actionButton = findViewById(R.id.action_button);
-        nameField = findViewById(R.id.name_edit_text);
         loginValue = findViewById(R.id.login_value);
-        Button saveButton = findViewById(R.id.save_button);
         Button pickImageButton = findViewById(R.id.pick_avatar_button);
         Button profileMenuButton = findViewById(R.id.profile_menu_button);
         Button addButton = findViewById(R.id.add_button);
@@ -93,23 +90,6 @@ public class Seting_activity extends AppCompatActivity {
             }
             Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
             pickImageLauncher.launch(intent);
-        });
-
-        saveButton.setOnClickListener(v -> {
-            if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
-                Toast.makeText(this, "Войдите для сохранения", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            FirebaseUser user = sessionManager.getAuth().getCurrentUser();
-            if (user == null) return;
-            String name = nameField.getText().toString().trim();
-            Map<String, Object> data = new HashMap<>();
-            data.put("name", name);
-            data.put("updatedAt", FieldValue.serverTimestamp());
-            firestore.collection("users").document(user.getUid()).update(data);
-            if (selectedImageUri != null) {
-                uploadAvatar(user.getUid(), selectedImageUri);
-            }
         });
 
         avatarView.setOnClickListener(v -> {
@@ -148,7 +128,6 @@ public class Seting_activity extends AppCompatActivity {
             avatarView.setImageResource(R.drawable.ic_login);
             actionButton.setImageResource(R.drawable.enter_but);
             loginValue.setText("Гость");
-            nameField.setText("");
         } else {
             FirebaseUser user = sessionManager.getAuth().getCurrentUser();
             if (user != null) {
@@ -168,9 +147,7 @@ public class Seting_activity extends AppCompatActivity {
                 .document(uid)
                 .get()
                 .addOnSuccessListener(snapshot -> {
-                    String name = snapshot.getString("name");
                     currentLogin = snapshot.getString("login");
-                    nameField.setText(name != null ? name : "");
                     loginValue.setText(currentLogin != null ? currentLogin : "");
                 })
                 .addOnFailureListener(e -> loginValue.setText(currentLogin != null ? currentLogin : ""));
@@ -197,6 +174,9 @@ public class Seting_activity extends AppCompatActivity {
 
         ShapeableImageView dialogAvatar = dialog.findViewById(R.id.dialog_avatar);
         TextView dialogLogin = dialog.findViewById(R.id.dialog_login_value);
+        TextInputEditText dialogLoginInput = dialog.findViewById(R.id.dialog_login_input);
+        TextView loginFeedbackText = dialog.findViewById(R.id.login_feedback_text);
+        Button saveProfileButton = dialog.findViewById(R.id.dialog_save_profile_button);
         Button changePasswordButton = dialog.findViewById(R.id.dialog_change_password_button);
         View passwordFields = dialog.findViewById(R.id.password_fields_container);
         TextInputEditText oldPasswordInput = dialog.findViewById(R.id.old_password_input);
@@ -211,11 +191,22 @@ public class Seting_activity extends AppCompatActivity {
             dialogAvatar.setImageResource(R.drawable.avatar_placeholder);
         }
 
-        dialogLogin.setText(currentLogin != null ? currentLogin : (user.getEmail() != null ? user.getEmail() : ""));
+        String initialLogin = currentLogin != null ? currentLogin : (user.getEmail() != null ? user.getEmail() : "");
+        dialogLogin.setText(initialLogin);
+        if (dialogLoginInput != null) {
+            dialogLoginInput.setText(initialLogin);
+        }
 
         changePasswordButton.setOnClickListener(v -> {
             // The menu replaces previous scattered buttons so account actions live in one focused, centered surface.
             passwordFields.setVisibility(View.VISIBLE);
+        });
+
+        saveProfileButton.setOnClickListener(v -> {
+            String newLogin = dialogLoginInput != null && dialogLoginInput.getText() != null
+                    ? dialogLoginInput.getText().toString().trim()
+                    : "";
+            handleProfileSave(user, newLogin, dialogLogin, loginFeedbackText, dialogLoginInput);
         });
 
         submitPasswordButton.setOnClickListener(v -> handlePasswordChange(user, oldPasswordInput, newPasswordInput, confirmPasswordInput, dialog));
@@ -267,6 +258,54 @@ public class Seting_activity extends AppCompatActivity {
                 .addOnFailureListener(e -> {
                     oldPasswordInput.setError("Неверный текущий пароль");
                     Toast.makeText(this, "Не удалось подтвердить личность", Toast.LENGTH_SHORT).show();
+                });
+    }
+
+    private void handleProfileSave(FirebaseUser user, String newLogin, TextView dialogLogin, TextView loginFeedbackText, TextInputEditText dialogLoginInput) {
+        if (newLogin.isEmpty()) {
+            if (dialogLoginInput != null) {
+                dialogLoginInput.setError("Логин не может быть пустым");
+            }
+            if (loginFeedbackText != null) {
+                loginFeedbackText.setText("Введите логин");
+                loginFeedbackText.setTextColor(ContextCompat.getColor(this, R.color.black));
+            }
+            return;
+        }
+
+        if (newLogin.length() < 3 || newLogin.length() > 30) {
+            if (dialogLoginInput != null) {
+                dialogLoginInput.setError("Логин должен быть от 3 до 30 символов");
+            }
+            if (loginFeedbackText != null) {
+                loginFeedbackText.setText("Неверная длина логина");
+                loginFeedbackText.setTextColor(ContextCompat.getColor(this, R.color.black));
+            }
+            return;
+        }
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("login", newLogin);
+        data.put("updatedAt", FieldValue.serverTimestamp());
+
+        firestore.collection("users").document(user.getUid()).update(data)
+                .addOnSuccessListener(unused -> {
+                    currentLogin = newLogin;
+                    dialogLogin.setText(newLogin);
+                    loginValue.setText(newLogin);
+                    if (loginFeedbackText != null) {
+                        loginFeedbackText.setText("Профиль сохранен");
+                        loginFeedbackText.setTextColor(ContextCompat.getColor(this, R.color.black));
+                    }
+                    if (selectedImageUri != null) {
+                        uploadAvatar(user.getUid(), selectedImageUri);
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    if (loginFeedbackText != null) {
+                        loginFeedbackText.setText("Не удалось сохранить профиль");
+                        loginFeedbackText.setTextColor(ContextCompat.getColor(this, R.color.black));
+                    }
                 });
     }
 
