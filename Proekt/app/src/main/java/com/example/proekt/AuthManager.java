@@ -89,10 +89,25 @@ public class AuthManager {
             return;
         }
 
-        signInWithEmail(emailOrLogin, password, callback);
+        String sanitizedInput = emailOrLogin.trim();
+        String resolvedEmail;
+        String loginUsed = null;
+
+        if (isEmail(sanitizedInput)) {
+            resolvedEmail = sanitizedInput;
+        } else {
+            loginUsed = sanitizedInput;
+            resolvedEmail = sessionManager.getCachedEmailForLogin(sanitizedInput);
+            if (TextUtils.isEmpty(resolvedEmail)) {
+                callback.onError("Не удалось найти почту для логина");
+                return;
+            }
+        }
+
+        signInWithEmail(resolvedEmail, password, callback, loginUsed);
     }
 
-    private void signInWithEmail(String email, String password, AuthCallback callback) {
+    private void signInWithEmail(String email, String password, AuthCallback callback, String loginUsed) {
         if (TextUtils.isEmpty(email) || TextUtils.isEmpty(password)) {
             callback.onError("Неверные данные");
             return;
@@ -101,6 +116,9 @@ public class AuthManager {
                 .addOnSuccessListener(result -> {
                     FirebaseUser user = result.getUser();
                     sessionManager.enableCloudMode(user);
+                    if (!TextUtils.isEmpty(loginUsed)) {
+                        sessionManager.cacheLoginEmail(loginUsed, email);
+                    }
                     callback.onSuccess();
                 })
                 .addOnFailureListener(e -> callback.onError("Ошибка входа"));
@@ -144,6 +162,7 @@ public class AuthManager {
                     batch.commit()
                             .addOnSuccessListener(unused -> {
                                 sessionManager.enableCloudMode(user);
+                                sessionManager.cacheLoginEmail(login, email);
                                 callback.onSuccess();
                             })
                             .addOnFailureListener(e -> {

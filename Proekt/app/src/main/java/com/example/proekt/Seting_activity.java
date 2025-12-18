@@ -304,11 +304,14 @@ public class Seting_activity extends AppCompatActivity {
         loginData.put("uid", uid);
         batch.set(firestore.collection("logins").document(newLogin), loginData);
 
+        String previousLogin = currentLogin;
+
         batch.commit()
                 .addOnSuccessListener(unused -> {
                     currentLogin = newLogin;
                     dialogLogin.setText(newLogin);
                     loginValue.setText(newLogin);
+                    sessionManager.updateCachedLogin(previousLogin, newLogin, user.getEmail());
                     if (loginFeedbackText != null) {
                         loginFeedbackText.setText("Профиль сохранен");
                         loginFeedbackText.setTextColor(ContextCompat.getColor(this, R.color.black));
