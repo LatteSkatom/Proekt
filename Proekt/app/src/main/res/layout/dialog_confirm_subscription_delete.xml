@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
+    android:layout_width="match_parent"
+    android:layout_height="150dp"
     android:background="@drawable/swim_success"
-    android:orientation="vertical"
     android:gravity="center_horizontal"
-    android:padding="24dp">
+    android:orientation="vertical"
+    android:padding="5dp">
 
     <TextView
         android:id="@+id/delete_confirmation_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:paddingBottom="8dp"
+        android:paddingBottom="6dp"
         android:text="Подтверждение удаления"
         android:textAllCaps="true"
         android:textColor="@color/black"
@@ -23,7 +23,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:paddingBottom="12dp"
+        android:paddingBottom="8dp"
         android:textColor="@color/black"
         android:textSize="14sp" />
 
@@ -32,7 +32,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:paddingBottom="12dp"
+        android:paddingBottom="8dp"
         android:textColor="@color/black"
         android:textSize="12sp" />
 
@@ -40,21 +40,23 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:orientation="vertical">
-
-        <Button
-            android:id="@+id/confirm_delete_button"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Delete subscription"
-            android:textAllCaps="false" />
+        android:orientation="horizontal">
 
         <Button
             android:id="@+id/cancel_delete_button"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
             android:text="Cancel"
+            android:textAllCaps="false" />
+
+        <Button
+            android:id="@+id/confirm_delete_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Delete subscription"
             android:textAllCaps="false" />
     </LinearLayout>
 
