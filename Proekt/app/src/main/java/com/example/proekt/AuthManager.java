@@ -17,10 +17,12 @@ import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.firebase.auth.FirebaseAuthUserCollisionException;
 import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.FirebaseFirestoreException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -85,17 +87,27 @@ public class AuthManager {
         if (isEmail(emailOrLogin)) {
             signInWithEmail(emailOrLogin, password, callback);
         } else {
-            firestore.collection("users")
-                    .whereEqualTo("login", emailOrLogin)
-                    .limit(1)
+            firestore.collection("logins")
+                    .document(emailOrLogin)
                     .get()
-                    .addOnSuccessListener(snapshot -> {
-                        if (!snapshot.isEmpty()) {
-                            String email = snapshot.getDocuments().get(0).getString("email");
-                            signInWithEmail(email, password, callback);
-                        } else {
+                    .addOnSuccessListener(doc -> {
+                        if (!doc.exists()) {
                             callback.onError("Логин не найден");
+                            return;
                         }
+                        String uid = doc.getString("uid");
+                        firestore.collection("users")
+                                .document(uid)
+                                .get()
+                                .addOnSuccessListener(userDoc -> {
+                                    String email = userDoc.getString("email");
+                                    if (TextUtils.isEmpty(email)) {
+                                        callback.onError("Ошибка входа");
+                                        return;
+                                    }
+                                    signInWithEmail(email, password, callback);
+                                })
+                                .addOnFailureListener(e -> callback.onError("Ошибка входа"));
                     })
                     .addOnFailureListener(e -> callback.onError("Ошибка входа"));
         }
@@ -121,20 +133,53 @@ public class AuthManager {
             return;
         }
 
-        firestore.collection("users").whereEqualTo("login", login).limit(1).get()
-                .addOnSuccessListener(snapshot -> {
-                    if (!snapshot.isEmpty()) {
+        firestore.collection("logins")
+                .document(login)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists()) {
                         callback.onError("Логин занят");
                         return;
                     }
+
                     auth.createUserWithEmailAndPassword(email, password)
                             .addOnSuccessListener(result -> {
                                 FirebaseUser user = result.getUser();
-                                createUserIfMissing(user, login);
-                                sessionManager.enableCloudMode(user);
-                                callback.onSuccess();
+                                if (user == null) {
+                                    callback.onError("Ошибка регистрации");
+                                    return;
+                                }
+
+                                String uid = user.getUid();
+                                Map<String, Object> loginData = new HashMap<>();
+                                loginData.put("uid", uid);
+
+                                firestore.runTransaction(transaction -> {
+                                            DocumentReference loginRef = firestore.collection("logins").document(login);
+                                            DocumentSnapshot snapshot = transaction.get(loginRef);
+                                            if (snapshot.exists()) {
+                                                throw new FirebaseFirestoreException("Login exists", FirebaseFirestoreException.Code.ABORTED);
+                                            }
+                                            transaction.set(loginRef, loginData);
+                                            return null;
+                                        })
+                                        .addOnSuccessListener(aVoid -> {
+                                            createUserIfMissing(user, login);
+                                            sessionManager.enableCloudMode(user);
+                                            callback.onSuccess();
+                                        })
+                                        .addOnFailureListener(e -> {
+                                            user.delete();
+                                            callback.onError("Логин занят");
+                                        });
                             })
-                            .addOnFailureListener(e -> callback.onError("Ошибка регистрации"));
+                            .addOnFailureListener(e -> {
+                                if (e instanceof FirebaseAuthUserCollisionException) {
+                                    callback.onError("Почта занята");
+                                } else {
+                                    callback.onError("Ошибка регистрации");
+                                }
+                            });
                 })
                 .addOnFailureListener(e -> callback.onError("Ошибка регистрации"));
     }

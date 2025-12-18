@@ -79,7 +79,19 @@ public class MainActivity extends AppCompatActivity {
 
     private void refreshMode() {
         if (sessionManager.getMode() == SessionManager.Mode.CLOUD) {
-            attachListener();
+            if (sessionManager.hasNetworkConnection()) {
+                attachListener();
+                mergePendingSubscriptions();
+                sessionManager.syncPendingCloudSubscriptions();
+            } else {
+                // Firestore listeners are not used while offline to avoid relying on its caching.
+                // We rely solely on the locally persisted cache populated during the last
+                // online session; Firestore is not available after process death when offline.
+                detachListener();
+                loadCachedCloudSubscriptions();
+                mergePendingSubscriptions();
+                adapter.notifyDataSetChanged();
+            }
         } else {
             detachListener();
             loadGuestSubscriptions();
@@ -88,7 +100,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void attachListener() {
         FirebaseUser user = sessionManager.getAuth().getCurrentUser();
-        if (user == null) return;
+        if (user == null || !sessionManager.hasNetworkConnection()) return;
         detachListener();
         subscriptionRegistration = sessionManager.getFirestore()
                 .collection("users")
@@ -97,18 +109,20 @@ public class MainActivity extends AppCompatActivity {
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .addSnapshotListener((snapshot, e) -> {
                     if (e != null || snapshot == null) return;
-                    List<FirebaseSubscription> previous = new ArrayList<>(subscriptionList);
-                    cancelNotifications(previous);
-                    subscriptionList.clear();
-                    subscriptionIds.clear();
+                    List<FirebaseSubscription> cloudSubscriptions = new ArrayList<>();
                     for (DocumentSnapshot doc : snapshot.getDocuments()) {
                         FirebaseSubscription sub = doc.toObject(FirebaseSubscription.class);
                         if (sub != null) {
                             sub.id = doc.getId();
-                            subscriptionList.add(sub);
-                            subscriptionIds.add(doc.getId());
+                            cloudSubscriptions.add(sub);
                         }
                     }
+                    // Persist the last known online state locally. UI will be refreshed from
+                    // the cache to avoid rendering Firestore data directly, honoring the
+                    // offline-first deletion contract.
+                    sessionManager.replaceLocalSubscriptions(cloudSubscriptions);
+                    loadCachedCloudSubscriptions();
+                    mergePendingSubscriptions();
                     adapter.notifyDataSetChanged();
                     scheduleNotifications(subscriptionList);
                 });
@@ -136,24 +150,54 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void deleteSubscription(int position) {
-        if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
-            if (position >= 0 && position < subscriptionList.size()) {
-                FirebaseSubscription sub = subscriptionList.remove(position);
-                sessionManager.removeLocalSubscription(position);
-                adapter.notifyItemRemoved(position);
-                cancelNotifications(java.util.Collections.singletonList(sub));
-            }
+        boolean isGuest = sessionManager.getMode() == SessionManager.Mode.GUEST;
+        if (position < 0 || position >= subscriptionList.size()) return;
+
+        FirebaseSubscription sub = subscriptionList.get(position);
+
+        if (isGuest) {
+            sessionManager.removeLocalSubscription(position);
+            loadGuestSubscriptions();
+            cancelNotifications(java.util.Collections.singletonList(sub));
             return;
         }
+
+        String subscriptionId = sub.id;
+        boolean online = sessionManager.hasNetworkConnection();
+
+        // Remove from local cache immediately so the UI is always driven by local state
+        // and remains accurate after offline restarts. Firestore will be updated later.
+        sessionManager.removeLocalSubscriptionById(subscriptionId, sub);
+        sessionManager.queuePendingDeletion(subscriptionId, sub);
+        refreshLocalCloudList();
+        adapter.notifyDataSetChanged();
+        cancelNotifications(java.util.Collections.singletonList(sub));
+
+        if (!online) {
+            Toast.makeText(this, "Удаление сохранено офлайн", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         FirebaseUser user = sessionManager.getAuth().getCurrentUser();
-        if (user == null || position < 0 || position >= subscriptionIds.size()) return;
+        if (user == null) return;
+
+        if (subscriptionId == null) {
+            // No Firestore id yet (likely a pending addition). Sync queue will skip it.
+            return;
+        }
+
         sessionManager.getFirestore()
                 .collection("users")
                 .document(user.getUid())
                 .collection("subscriptions")
-                .document(subscriptionIds.get(position))
+                .document(subscriptionId)
                 .delete()
-                .addOnFailureListener(e -> Toast.makeText(this, "Ошибка удаления", Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(v -> {
+                    // Remove from queue once the cloud deletion succeeds.
+                    sessionManager.markDeletionSynced(subscriptionId);
+                    sessionManager.syncPendingCloudSubscriptions();
+                })
+                .addOnFailureListener(e -> Toast.makeText(this, "Удаление будет выполнено после подключения", Toast.LENGTH_SHORT).show());
     }
 
     private void scheduleNotifications(List<FirebaseSubscription> subscriptions) {
@@ -235,6 +279,8 @@ public class MainActivity extends AppCompatActivity {
             loadGuestSubscriptions();
         } else if (requestCode == LOGIN_REQUEST && resultCode == RESULT_OK) {
             refreshMode();
+        } else if (requestCode == ADD_REQUEST && resultCode == RESULT_OK) {
+            refreshMode();
         }
     }
 
@@ -242,7 +288,68 @@ public class MainActivity extends AppCompatActivity {
         subscriptionList.clear();
         subscriptionIds.clear();
         subscriptionList.addAll(sessionManager.getLocalSubscriptions());
+        for (FirebaseSubscription sub : subscriptionList) {
+            if (sub.id != null && !subscriptionIds.contains(sub.id)) {
+                subscriptionIds.add(sub.id);
+            }
+        }
         adapter.notifyDataSetChanged();
         scheduleNotifications(subscriptionList);
+    }
+
+    private void loadCachedCloudSubscriptions() {
+        subscriptionList.clear();
+        subscriptionIds.clear();
+        subscriptionList.addAll(sessionManager.getLocalSubscriptions());
+        for (FirebaseSubscription sub : subscriptionList) {
+            if (sub.id != null && !subscriptionIds.contains(sub.id)) {
+                subscriptionIds.add(sub.id);
+            }
+        }
+        adapter.notifyDataSetChanged();
+        scheduleNotifications(subscriptionList);
+    }
+
+    private void refreshLocalCloudList() {
+        subscriptionList.clear();
+        subscriptionIds.clear();
+        subscriptionList.addAll(sessionManager.getLocalSubscriptions());
+        for (FirebaseSubscription sub : subscriptionList) {
+            if (sub.id != null && !subscriptionIds.contains(sub.id)) {
+                subscriptionIds.add(sub.id);
+            }
+        }
+    }
+
+    private void mergePendingSubscriptions() {
+        List<FirebaseSubscription> pending = sessionManager.getPendingCloudSubscriptions();
+        if (pending.isEmpty()) return;
+
+        for (FirebaseSubscription pendingSub : pending) {
+            boolean alreadyPresent = false;
+            for (FirebaseSubscription existing : subscriptionList) {
+                if (sameSubscription(existing, pendingSub)) {
+                    alreadyPresent = true;
+                    break;
+                }
+            }
+            if (!alreadyPresent) {
+                subscriptionList.add(0, pendingSub);
+            }
+        }
+    }
+
+    private boolean sameSubscription(FirebaseSubscription a, FirebaseSubscription b) {
+        if (a == null || b == null) return false;
+        if (Double.compare(a.cost, b.cost) != 0) return false;
+        if (a.isActive != b.isActive) return false;
+        if (!safeEquals(a.serviceName, b.serviceName)) return false;
+        if (!safeEquals(a.frequency, b.frequency)) return false;
+        return safeEquals(a.nextPaymentDate, b.nextPaymentDate);
+    }
+
+    private boolean safeEquals(String a, String b) {
+        if (a == null) return b == null;
+        return a.equals(b);
     }
 }

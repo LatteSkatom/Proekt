@@ -13,19 +13,14 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.FieldValue;
-import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
-import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
 
 public class AddActivity extends AppCompatActivity {
 
     private SessionManager sessionManager;
-    private FirebaseFirestore firestore;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -33,7 +28,6 @@ public class AddActivity extends AppCompatActivity {
         setContentView(R.layout.add_sub);
 
         sessionManager = SessionManager.getInstance(this);
-        firestore = sessionManager.getFirestore();
 
         EditText serviceField = findViewById(R.id.editServiceName);
         EditText costField = findViewById(R.id.editCost);
@@ -86,33 +80,35 @@ public class AddActivity extends AppCompatActivity {
 
             if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
                 sessionManager.addLocalSubscription(subscription);
-                setResult(RESULT_OK, new Intent());
-                finish();
+                completeAndReturn();
             } else {
                 FirebaseUser user = sessionManager.getAuth().getCurrentUser();
                 if (user == null) {
                     Toast.makeText(this, "Авторизуйтесь", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                Map<String, Object> data = new HashMap<>();
-                data.put("serviceName", serviceName);
-                data.put("cost", cost);
-                data.put("frequency", frequency);
-                data.put("nextPaymentDate", nextDate);
-                data.put("isActive", isActive);
-                data.put("createdAt", FieldValue.serverTimestamp());
+                sessionManager.saveCloudSubscription(subscription, new SessionManager.SubscriptionSaveCallback() {
+                    @Override
+                    public void onSuccess(boolean syncedImmediately) {
+                        if (!syncedImmediately) {
+                            Toast.makeText(AddActivity.this, "Сохранено офлайн, синхронизируем при подключении", Toast.LENGTH_SHORT).show();
+                        }
+                        completeAndReturn();
+                    }
 
-                firestore.collection("users")
-                        .document(user.getUid())
-                        .collection("subscriptions")
-                        .add(data)
-                        .addOnSuccessListener(r -> {
-                            setResult(RESULT_OK, new Intent());
-                            finish();
-                        })
-                        .addOnFailureListener(e -> Toast.makeText(AddActivity.this, "Ошибка сохранения", Toast.LENGTH_SHORT).show());
+                    @Override
+                    public void onError(String message) {
+                        Toast.makeText(AddActivity.this, message, Toast.LENGTH_SHORT).show();
+                    }
+                });
             }
         });
+    }
+
+    private void completeAndReturn() {
+        setResult(RESULT_OK, new Intent());
+        startActivity(new Intent(AddActivity.this, MainActivity.class));
+        finish();
     }
 
     private void showDatePicker(EditText target) {
