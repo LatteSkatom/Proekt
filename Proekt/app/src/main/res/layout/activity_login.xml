@@ -139,14 +139,14 @@
         app:layout_constraintStart_toStartOf="@+id/imageView9"
         app:layout_constraintTop_toTopOf="@+id/imageView17" />
 
-    <Button
+
+    <com.google.android.material.imageview.ShapeableImageView
         android:id="@+id/google_button"
-        android:layout_width="97dp"
-        android:layout_height="47dp"
-        android:backgroundTint="#00F6F6F6"
-        android:text="Google"
-        android:textAllCaps="false"
-        android:textColor="@color/white"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        app:srcCompat="@drawable/google"
+        tools:layout_editor_absoluteX="124dp"
+        tools:layout_editor_absoluteY="293dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@+id/register_button"
         app:layout_constraintTop_toBottomOf="@+id/login_button" />

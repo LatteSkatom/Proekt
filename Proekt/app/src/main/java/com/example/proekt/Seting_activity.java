@@ -99,6 +99,8 @@ public class Seting_activity extends AppCompatActivity {
         Button subButton = findViewById(R.id.sub_button);
         Button analyticsButton = findViewById(R.id.Analit_button);
 
+        loginButton.setOnClickListener(v -> handleAuthAction());
+
         pickImageButton.setOnClickListener(v -> {
             if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
                 Toast.makeText(this, "Доступно после входа", Toast.LENGTH_SHORT).show();
@@ -185,7 +187,6 @@ public class Seting_activity extends AppCompatActivity {
             window.setAttributes(params);
         }
 
-        ShapeableImageView loginButton = findViewById(R.id.login_button);
         ShapeableImageView dialogAvatar = dialog.findViewById(R.id.dialog_avatar);
         ShapeableImageView actionButton = dialog.findViewById(R.id.action_button);
         TextView dialogLogin = dialog.findViewById(R.id.dialog_login_value);
@@ -202,15 +203,6 @@ public class Seting_activity extends AppCompatActivity {
         ShapeableImageView closeDialogButton = dialog.findViewById(R.id.close_dialog_button);
 
         loadAvatar(user, dialogAvatar);
-
-
-        loginButton.setOnClickListener(v -> {
-            if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
-                loginLauncher.launch(new Intent(this, LoginActivity.class));
-            } else {
-                showProfileMenuDialog();
-            }
-        });
 
         actionButton.setOnClickListener(v -> {
             dialog.dismiss();
