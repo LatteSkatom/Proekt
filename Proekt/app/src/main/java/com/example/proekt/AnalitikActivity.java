@@ -9,6 +9,7 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.proekt.utils.ActivityTransitionUtils;
 import com.google.android.material.imageview.ShapeableImageView;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
@@ -46,13 +47,22 @@ public class AnalitikActivity extends AppCompatActivity {
         sessionManager = SessionManager.getInstance(this);
 
         Button addButton = findViewById(R.id.add_button);
-        addButton.setOnClickListener(v -> startActivity(new Intent(AnalitikActivity.this, AddActivity.class)));
+        addButton.setOnClickListener(v -> ActivityTransitionUtils.startActivityWithFadeAndFinish(
+                AnalitikActivity.this,
+                new Intent(AnalitikActivity.this, AddActivity.class)
+        ));
 
         Button subButton = findViewById(R.id.sub_button);
-        subButton.setOnClickListener(v -> startActivity(new Intent(AnalitikActivity.this, MainActivity.class)));
+        subButton.setOnClickListener(v -> ActivityTransitionUtils.startActivityWithFadeAndFinish(
+                AnalitikActivity.this,
+                new Intent(AnalitikActivity.this, MainActivity.class)
+        ));
 
         ShapeableImageView settingsbutton = findViewById(R.id.settingsbutt);
-        settingsbutton.setOnClickListener(v -> startActivity(new Intent(AnalitikActivity.this, Seting_activity.class)));
+        settingsbutton.setOnClickListener(v -> ActivityTransitionUtils.startActivityWithFade(
+                AnalitikActivity.this,
+                new Intent(AnalitikActivity.this, Seting_activity.class)
+        ));
 
         periodBtn.setText(PERIOD_LABELS[periodIndex]);
         periodBtn.setOnClickListener(v -> {
@@ -148,5 +158,10 @@ public class AnalitikActivity extends AppCompatActivity {
         }
 
         totalSumTv.setText(String.format(Locale.getDefault(), "Сумма: %.2f ₽", result));
+    }
+
+    @Override
+    public void onBackPressed() {
+        ActivityTransitionUtils.finishWithFadeBack(this);
     }
 }

@@ -12,6 +12,8 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.proekt.utils.ActivityTransitionUtils;
+
 public class LoginActivity extends AppCompatActivity {
 
     private AuthManager authManager;
@@ -41,7 +43,10 @@ public class LoginActivity extends AppCompatActivity {
                 new ToastCallback()
         ));
 
-        registerButton.setOnClickListener(v -> startActivity(new Intent(this, RegisterActivity.class)));
+        registerButton.setOnClickListener(v -> ActivityTransitionUtils.startActivityWithFade(
+                this,
+                new Intent(this, RegisterActivity.class)
+        ));
         googleButton.setOnClickListener(v -> authManager.startGoogle(this, googleLauncher));
     }
 
