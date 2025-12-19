@@ -23,6 +23,26 @@ Proekt — мобильное Android‑приложение для работы
 - Данные профиля и логин хранятся в Firebase Firestore.
 - Изображения аватара сохраняются локально на устройстве, а при наличии URL подхватываются из профиля Firebase.
 
+Структура базы данных в Firebase (Firestore)
+- Коллекция users/{uid}
+  - email (string)
+  - login (string)
+  - name (string)
+  - avatarUrl (string|null)
+  - createdAt (timestamp)
+  - updatedAt (timestamp, при изменении логина)
+  - Подколлекция subscriptions
+    - serviceName (string)
+    - cost (number)
+    - frequency (string)
+    - nextPaymentDate (string)
+    - isActive (boolean)
+    - createdAt (timestamp)
+- Коллекция logins/{login}
+  - uid (string)
+- Коллекция emails/{sha256(email)}
+  - uid (string)
+
 Технологии и зависимости
 - Kotlin/Java (Android SDK)
 - Firebase Auth, Firebase Firestore
