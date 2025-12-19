@@ -48,7 +48,10 @@ public class Seting_activity extends AppCompatActivity {
     private SessionManager sessionManager;
     private FirebaseFirestore firestore;
     private ShapeableImageView avatarView;
-    private ShapeableImageView actionButton;
+
+    private ShapeableImageView loginButton;
+
+
     private Uri selectedImageUri;
     private TextView loginValue;
     private String currentLogin;
@@ -87,7 +90,8 @@ public class Seting_activity extends AppCompatActivity {
         firestore = sessionManager.getFirestore();
 
         avatarView = findViewById(R.id.profile_image);
-        actionButton = findViewById(R.id.action_button);
+        loginButton = findViewById(R.id.login_button);
+
         loginValue = findViewById(R.id.login_value);
         ShapeableImageView pickImageButton = findViewById(R.id.pick_avatar_button);
         ShapeableImageView profileMenuButton = findViewById(R.id.profile_menu_button);
@@ -108,7 +112,7 @@ public class Seting_activity extends AppCompatActivity {
             // Avatar tap intentionally does nothing to avoid mixing profile edits
             // with auth flows. This spot can be used later for changing the avatar.
         });
-        actionButton.setOnClickListener(v -> handleAuthAction());
+
 
         profileMenuButton.setOnClickListener(v -> {
             if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
@@ -138,15 +142,17 @@ public class Seting_activity extends AppCompatActivity {
     private void updateUi() {
         if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
             avatarView.setImageResource(R.drawable.ic_login);
-            actionButton.setImageResource(R.drawable.enter_but);
+            loginButton.setVisibility(View.VISIBLE);
+
             loginValue.setText("Гость");
         } else {
+            loginButton.setVisibility(View.GONE);
             FirebaseUser user = sessionManager.getAuth().getCurrentUser();
             if (user != null) {
                 loadAvatar(user, avatarView);
                 loadProfile(user.getUid());
             }
-            actionButton.setImageResource(R.drawable.exitbutt);
+
         }
     }
 
@@ -175,26 +181,44 @@ public class Seting_activity extends AppCompatActivity {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             WindowManager.LayoutParams params = window.getAttributes();
             params.gravity = Gravity.CENTER;
-            // Outside area stays semi-transparent to keep focus on the centered menu.
             window.setDimAmount(0.6f);
             window.setAttributes(params);
         }
 
+        ShapeableImageView loginButton = findViewById(R.id.login_button);
         ShapeableImageView dialogAvatar = dialog.findViewById(R.id.dialog_avatar);
+        ShapeableImageView actionButton = dialog.findViewById(R.id.action_button);
         TextView dialogLogin = dialog.findViewById(R.id.dialog_login_value);
         TextInputEditText dialogLoginInput = dialog.findViewById(R.id.dialog_login_input);
         TextView loginFeedbackText = dialog.findViewById(R.id.login_feedback_text);
-        MaterialButton toggleLoginButton = dialog.findViewById(R.id.dialog_login_toggle_button);
+        ShapeableImageView toggleLoginButton = dialog.findViewById(R.id.dialog_login_toggle_button);
         ShapeableImageView saveProfileButton = dialog.findViewById(R.id.dialog_save_profile_button);
         ShapeableImageView changePasswordButton = dialog.findViewById(R.id.dialog_change_password_button);
         View passwordFields = dialog.findViewById(R.id.password_fields_container);
         TextInputEditText oldPasswordInput = dialog.findViewById(R.id.old_password_input);
         TextInputEditText newPasswordInput = dialog.findViewById(R.id.new_password_input);
         TextInputEditText confirmPasswordInput = dialog.findViewById(R.id.confirm_password_input);
-        Button submitPasswordButton = dialog.findViewById(R.id.submit_password_button);
-        ShapeableImageView closeButton = dialog.findViewById(R.id.close_menu_button);
+        ShapeableImageView submitPasswordButton = dialog.findViewById(R.id.submit_password_button);
+        ShapeableImageView closeDialogButton = dialog.findViewById(R.id.close_dialog_button);
 
         loadAvatar(user, dialogAvatar);
+
+
+        loginButton.setOnClickListener(v -> {
+            if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
+                loginLauncher.launch(new Intent(this, LoginActivity.class));
+            } else {
+                showProfileMenuDialog();
+            }
+        });
+
+        actionButton.setOnClickListener(v -> {
+            dialog.dismiss();
+            sessionManager.signOutToGuest();
+            Toast.makeText(this, "Вы вышли из аккаунта", Toast.LENGTH_SHORT).show();
+            updateUi();
+        });
+
 
         String initialLogin = currentLogin != null ? currentLogin : (user.getEmail() != null ? user.getEmail() : "");
         dialogLogin.setText(initialLogin);
@@ -202,11 +226,7 @@ public class Seting_activity extends AppCompatActivity {
             dialogLoginInput.setText(initialLogin);
         }
 
-        changePasswordButton.setOnClickListener(v -> {
-            // The menu replaces previous scattered buttons so account actions live in one focused, centered surface.
-            passwordFields.setVisibility(View.VISIBLE);
-        });
-
+        changePasswordButton.setOnClickListener(v -> togglePasswordSection(dialog));
         toggleLoginButton.setOnClickListener(v -> toggleLoginSection(dialog));
 
         saveProfileButton.setOnClickListener(v -> {
@@ -217,11 +237,12 @@ public class Seting_activity extends AppCompatActivity {
         });
 
         submitPasswordButton.setOnClickListener(v -> handlePasswordChange(user, oldPasswordInput, newPasswordInput, confirmPasswordInput, dialog));
-        closeButton.setOnClickListener(v -> dialog.dismiss());
+        closeDialogButton.setOnClickListener(v -> dialog.dismiss());
 
         dialog.setCancelable(true);
         dialog.show();
     }
+
 
     private void handlePasswordChange(FirebaseUser user, TextInputEditText oldPasswordInput, TextInputEditText newPasswordInput, TextInputEditText confirmPasswordInput, Dialog dialog) {
         String oldPassword = oldPasswordInput.getText() != null ? oldPasswordInput.getText().toString().trim() : "";
@@ -382,10 +403,49 @@ public class Seting_activity extends AppCompatActivity {
             Toast.makeText(this, "Не удалось сохранить аватар", Toast.LENGTH_SHORT).show();
         }
     }
+    private void togglePasswordSection(Dialog dialog) {
+        View passwordFields = dialog.findViewById(R.id.password_fields_container);
+        View loginSection = dialog.findViewById(R.id.login_section_container);
+
+        if (passwordFields == null) return;
+
+        // 🔒 ВСЕГДА закрываем логин
+        if (loginSection != null && loginSection.getVisibility() == View.VISIBLE) {
+            loginSection.setVisibility(View.GONE);
+            loginSection.setAlpha(1f);
+        }
+
+        if (passwordFields.getVisibility() == View.VISIBLE) {
+            passwordFields.animate()
+                    .alpha(0f)
+                    .setDuration(150)
+                    .withEndAction(() -> {
+                        passwordFields.setVisibility(View.GONE);
+                        passwordFields.setAlpha(1f);
+                    })
+                    .start();
+        } else {
+            passwordFields.setAlpha(0f);
+            passwordFields.setVisibility(View.VISIBLE);
+            passwordFields.animate()
+                    .alpha(1f)
+                    .setDuration(200)
+                    .start();
+        }
+    }
+
 
     private void toggleLoginSection(Dialog dialog) {
         View loginSection = dialog.findViewById(R.id.login_section_container);
+        View passwordFields = dialog.findViewById(R.id.password_fields_container);
+
         if (loginSection == null) return;
+
+        // 🔒 ВСЕГДА закрываем пароль
+        if (passwordFields != null && passwordFields.getVisibility() == View.VISIBLE) {
+            passwordFields.setVisibility(View.GONE);
+            passwordFields.setAlpha(1f);
+        }
 
         if (loginSection.getVisibility() == View.VISIBLE) {
             loginSection.animate()
@@ -405,4 +465,5 @@ public class Seting_activity extends AppCompatActivity {
                     .start();
         }
     }
+
 }
