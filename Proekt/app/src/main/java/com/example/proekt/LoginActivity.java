@@ -5,6 +5,8 @@ import android.os.Bundle;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
+import com.google.android.material.imageview.ShapeableImageView;
+
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -30,7 +32,7 @@ public class LoginActivity extends AppCompatActivity {
         EditText emailOrLogin = findViewById(R.id.email_edit_text);
         EditText password = findViewById(R.id.password_edit_text);
         Button loginButton = findViewById(R.id.login_button);
-        Button googleButton = findViewById(R.id.google_button);
+        ShapeableImageView googleButton = findViewById(R.id.google_button);
         Button registerButton = findViewById(R.id.register_button);
 
         loginButton.setOnClickListener(v -> authManager.loginWithEmailOrLogin(
