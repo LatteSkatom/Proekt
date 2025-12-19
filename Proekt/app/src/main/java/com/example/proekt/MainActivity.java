@@ -98,8 +98,7 @@ public class MainActivity extends AppCompatActivity {
         ImageButton sortButton = findViewById(R.id.sort_button);
         sortButton.setOnClickListener(this::showSortMenu);
 
-        ImageButton filterButton = findViewById(R.id.filter_button);
-        filterButton.setOnClickListener(this::showFilterMenu);
+
     }
 
     @Override

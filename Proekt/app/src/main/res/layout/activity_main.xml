@@ -99,29 +99,16 @@
         android:id="@+id/sort_button"
         android:layout_width="48dp"
         android:layout_height="48dp"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="120dp"
+        android:layout_marginBottom="16dp"
         android:background="@drawable/circle_bg"
         android:contentDescription="Сортировка"
         android:padding="10dp"
         android:src="@android:drawable/ic_menu_sort_by_size"
         android:tint="@android:color/white"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintBottom_toTopOf="@+id/imageView20"
+        app:layout_constraintEnd_toEndOf="@+id/imageView20" />
 
-    <ImageButton
-        android:id="@+id/filter_button"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="12dp"
-        android:background="@drawable/circle_bg"
-        android:contentDescription="Фильтрация"
-        android:padding="10dp"
-        android:src="@android:drawable/ic_menu_search"
-        android:tint="@android:color/white"
-        app:layout_constraintBottom_toTopOf="@+id/sort_button"
-        app:layout_constraintEnd_toEndOf="parent" />
+
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>
