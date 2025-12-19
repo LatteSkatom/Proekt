@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:background="@drawable/swim_menu"
-    android:padding="24dp">
+    android:fillViewport="true">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/swim_menu"
+        android:padding="24dp">
 
     <com.google.android.material.imageview.ShapeableImageView
         android:id="@+id/dialog_avatar"
@@ -17,7 +22,35 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.App.CircleImage" />
 
-    <TextView
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/close_dialog_button"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:contentDescription="Close"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
+            app:srcCompat="@android:drawable/ic_menu_close_clear_cancel"
+            app:tint="@color/white"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/action_button"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginTop="16dp"
+            android:clickable="true"
+            android:contentDescription="Close"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/close_dialog_button"
+            app:srcCompat="@drawable/exit_acc"/>
+
+
+        <TextView
         android:id="@+id/dialog_login_value"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -30,16 +63,26 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
 
-
     <com.google.android.material.imageview.ShapeableImageView
-        android:id="@+id/dialog_change_password_button"
-        android:layout_width="0dp"
-        android:layout_height="60dp"
-        android:layout_marginTop="16dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/dialog_login_value"
-        app:srcCompat="@drawable/change_but" />
+         android:id="@+id/dialog_login_toggle_button"
+         android:layout_width="0dp"
+         android:layout_height="60dp"
+         android:layout_marginTop="12dp"
+         app:layout_constraintStart_toStartOf="parent"
+         app:layout_constraintTop_toBottomOf="@id/dialog_login_value"
+         app:layout_constraintEnd_toEndOf="parent"
+         app:srcCompat="@drawable/change_login"/>
+
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/dialog_change_password_button"
+            android:layout_width="0dp"
+            android:layout_height="60dp"
+            android:layout_marginTop="10dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/dialog_login_toggle_button"
+            app:srcCompat="@drawable/change_but" />
 
     <LinearLayout
         android:id="@+id/login_section_container"
@@ -47,6 +90,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
         android:orientation="vertical"
+        android:visibility="gone"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/dialog_change_password_button"
         app:layout_constraintEnd_toEndOf="parent">
@@ -90,12 +134,7 @@
             android:layout_height="60dp"
             app:srcCompat="@drawable/save_but" />
 
-        <com.google.android.material.imageview.ShapeableImageView
-            android:id="@+id/close_menu_button"
-            android:layout_width="wrap_content"
-            android:layout_marginTop="8dp"
-            android:layout_height="60dp"
-            app:srcCompat="@drawable/cancel_but_big" />
+
     </LinearLayout>
 
     <LinearLayout
@@ -147,14 +186,26 @@
                 android:inputType="textPassword" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <Button
+        <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/submit_password_button"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="60dp"
             android:layout_marginTop="12dp"
-            android:text="Apply"
-            android:textAllCaps="false" />
+            app:srcCompat="@drawable/save_but" />
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/close_menu_button"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_marginTop="12dp"
+            app:srcCompat="@drawable/cancel_but_big" />
+
+
+
+
+
 
     </LinearLayout>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>

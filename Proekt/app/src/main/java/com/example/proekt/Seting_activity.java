@@ -24,7 +24,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.signature.ObjectKey;
 import com.google.android.material.imageview.ShapeableImageView;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.EmailAuthProvider;
@@ -34,9 +36,10 @@ import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.WriteBatch;
-import com.google.firebase.storage.FirebaseStorage;
-import com.google.firebase.storage.StorageReference;
-
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,7 +48,10 @@ public class Seting_activity extends AppCompatActivity {
     private SessionManager sessionManager;
     private FirebaseFirestore firestore;
     private ShapeableImageView avatarView;
-    private ShapeableImageView actionButton;
+
+    private ShapeableImageView loginButton;
+
+
     private Uri selectedImageUri;
     private TextView loginValue;
     private String currentLogin;
@@ -56,6 +62,12 @@ public class Seting_activity extends AppCompatActivity {
                     selectedImageUri = result.getData().getData();
                     if (selectedImageUri != null) {
                         Glide.with(this).load(selectedImageUri).into(avatarView);
+                        FirebaseUser user = sessionManager.getAuth().getCurrentUser();
+                        if (user != null) {
+                            saveAvatarLocally(user.getUid(), selectedImageUri);
+                        } else {
+                            Toast.makeText(this, "Войдите, чтобы сохранить аватар", Toast.LENGTH_SHORT).show();
+                        }
                     }
                 }
             }
@@ -78,7 +90,8 @@ public class Seting_activity extends AppCompatActivity {
         firestore = sessionManager.getFirestore();
 
         avatarView = findViewById(R.id.profile_image);
-        actionButton = findViewById(R.id.action_button);
+        loginButton = findViewById(R.id.login_button);
+
         loginValue = findViewById(R.id.login_value);
         ShapeableImageView pickImageButton = findViewById(R.id.pick_avatar_button);
         ShapeableImageView profileMenuButton = findViewById(R.id.profile_menu_button);
@@ -99,7 +112,7 @@ public class Seting_activity extends AppCompatActivity {
             // Avatar tap intentionally does nothing to avoid mixing profile edits
             // with auth flows. This spot can be used later for changing the avatar.
         });
-        actionButton.setOnClickListener(v -> handleAuthAction());
+
 
         profileMenuButton.setOnClickListener(v -> {
             if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
@@ -129,19 +142,17 @@ public class Seting_activity extends AppCompatActivity {
     private void updateUi() {
         if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
             avatarView.setImageResource(R.drawable.ic_login);
-            actionButton.setImageResource(R.drawable.enter_but);
+            loginButton.setVisibility(View.VISIBLE);
+
             loginValue.setText("Гость");
         } else {
+            loginButton.setVisibility(View.GONE);
             FirebaseUser user = sessionManager.getAuth().getCurrentUser();
             if (user != null) {
-                if (user.getPhotoUrl() != null) {
-                    Glide.with(this).load(user.getPhotoUrl()).into(avatarView);
-                } else {
-                    avatarView.setImageResource(R.drawable.avatar_placeholder);
-                }
+                loadAvatar(user, avatarView);
                 loadProfile(user.getUid());
             }
-            actionButton.setImageResource(R.drawable.exitbutt);
+
         }
     }
 
@@ -170,29 +181,44 @@ public class Seting_activity extends AppCompatActivity {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             WindowManager.LayoutParams params = window.getAttributes();
             params.gravity = Gravity.CENTER;
-            // Outside area stays semi-transparent to keep focus on the centered menu.
             window.setDimAmount(0.6f);
             window.setAttributes(params);
         }
 
+        ShapeableImageView loginButton = findViewById(R.id.login_button);
         ShapeableImageView dialogAvatar = dialog.findViewById(R.id.dialog_avatar);
+        ShapeableImageView actionButton = dialog.findViewById(R.id.action_button);
         TextView dialogLogin = dialog.findViewById(R.id.dialog_login_value);
         TextInputEditText dialogLoginInput = dialog.findViewById(R.id.dialog_login_input);
         TextView loginFeedbackText = dialog.findViewById(R.id.login_feedback_text);
+        ShapeableImageView toggleLoginButton = dialog.findViewById(R.id.dialog_login_toggle_button);
         ShapeableImageView saveProfileButton = dialog.findViewById(R.id.dialog_save_profile_button);
         ShapeableImageView changePasswordButton = dialog.findViewById(R.id.dialog_change_password_button);
         View passwordFields = dialog.findViewById(R.id.password_fields_container);
         TextInputEditText oldPasswordInput = dialog.findViewById(R.id.old_password_input);
         TextInputEditText newPasswordInput = dialog.findViewById(R.id.new_password_input);
         TextInputEditText confirmPasswordInput = dialog.findViewById(R.id.confirm_password_input);
-        Button submitPasswordButton = dialog.findViewById(R.id.submit_password_button);
-        ShapeableImageView closeButton = dialog.findViewById(R.id.close_menu_button);
+        ShapeableImageView submitPasswordButton = dialog.findViewById(R.id.submit_password_button);
+        ShapeableImageView closeDialogButton = dialog.findViewById(R.id.close_dialog_button);
 
-        if (user.getPhotoUrl() != null) {
-            Glide.with(this).load(user.getPhotoUrl()).into(dialogAvatar);
-        } else {
-            dialogAvatar.setImageResource(R.drawable.avatar_placeholder);
-        }
+        loadAvatar(user, dialogAvatar);
+
+
+        loginButton.setOnClickListener(v -> {
+            if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
+                loginLauncher.launch(new Intent(this, LoginActivity.class));
+            } else {
+                showProfileMenuDialog();
+            }
+        });
+
+        actionButton.setOnClickListener(v -> {
+            dialog.dismiss();
+            sessionManager.signOutToGuest();
+            Toast.makeText(this, "Вы вышли из аккаунта", Toast.LENGTH_SHORT).show();
+            updateUi();
+        });
+
 
         String initialLogin = currentLogin != null ? currentLogin : (user.getEmail() != null ? user.getEmail() : "");
         dialogLogin.setText(initialLogin);
@@ -200,10 +226,8 @@ public class Seting_activity extends AppCompatActivity {
             dialogLoginInput.setText(initialLogin);
         }
 
-        changePasswordButton.setOnClickListener(v -> {
-            // The menu replaces previous scattered buttons so account actions live in one focused, centered surface.
-            passwordFields.setVisibility(View.VISIBLE);
-        });
+        changePasswordButton.setOnClickListener(v -> togglePasswordSection(dialog));
+        toggleLoginButton.setOnClickListener(v -> toggleLoginSection(dialog));
 
         saveProfileButton.setOnClickListener(v -> {
             String newLogin = dialogLoginInput != null && dialogLoginInput.getText() != null
@@ -213,11 +237,12 @@ public class Seting_activity extends AppCompatActivity {
         });
 
         submitPasswordButton.setOnClickListener(v -> handlePasswordChange(user, oldPasswordInput, newPasswordInput, confirmPasswordInput, dialog));
-        closeButton.setOnClickListener(v -> dialog.dismiss());
+        closeDialogButton.setOnClickListener(v -> dialog.dismiss());
 
         dialog.setCancelable(true);
         dialog.show();
     }
+
 
     private void handlePasswordChange(FirebaseUser user, TextInputEditText oldPasswordInput, TextInputEditText newPasswordInput, TextInputEditText confirmPasswordInput, Dialog dialog) {
         String oldPassword = oldPasswordInput.getText() != null ? oldPasswordInput.getText().toString().trim() : "";
@@ -316,9 +341,6 @@ public class Seting_activity extends AppCompatActivity {
                         loginFeedbackText.setText("Профиль сохранен");
                         loginFeedbackText.setTextColor(ContextCompat.getColor(this, R.color.black));
                     }
-                    if (selectedImageUri != null) {
-                        uploadAvatar(uid, selectedImageUri);
-                    }
                 })
                 .addOnFailureListener(e -> {
                     if (loginFeedbackText != null) {
@@ -333,11 +355,115 @@ public class Seting_activity extends AppCompatActivity {
                 });
     }
 
-    private void uploadAvatar(String uid, Uri uri) {
-        StorageReference ref = FirebaseStorage.getInstance().getReference().child("avatars/" + uid + ".jpg");
-        ref.putFile(uri).continueWithTask(task -> ref.getDownloadUrl())
-                .addOnSuccessListener(downloadUri -> firestore.collection("users").document(uid)
-                        .update("avatarUrl", downloadUri.toString()))
-                .addOnFailureListener(e -> Toast.makeText(this, "Ошибка загрузки", Toast.LENGTH_SHORT).show());
+    private void loadAvatar(FirebaseUser user, ShapeableImageView target) {
+        File avatarFile = getAvatarFile(user.getUid());
+        if (avatarFile.exists()) {
+            Glide.with(this)
+                    .load(avatarFile)
+                    .signature(new ObjectKey(avatarFile.lastModified()))
+                    .skipMemoryCache(true)
+                    .into(target);
+        } else if (user.getPhotoUrl() != null) {
+            Glide.with(this).load(user.getPhotoUrl()).into(target);
+        } else {
+            target.setImageResource(R.drawable.avatar_placeholder);
+        }
     }
+
+    private File getAvatarFile(String uid) {
+        File avatarDir = new File(getFilesDir(), "avatars");
+        if (!avatarDir.exists()) {
+            avatarDir.mkdirs();
+        }
+        return new File(avatarDir, uid + ".jpg");
+    }
+
+    private void saveAvatarLocally(String uid, Uri uri) {
+        File avatarFile = getAvatarFile(uid);
+        try (InputStream inputStream = getContentResolver().openInputStream(uri);
+             FileOutputStream outputStream = new FileOutputStream(avatarFile)) {
+            if (inputStream == null) {
+                Toast.makeText(this, "Не удалось открыть изображение", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+
+            Glide.with(this)
+                    .load(avatarFile)
+                    .signature(new ObjectKey(avatarFile.lastModified()))
+                    .skipMemoryCache(true)
+                    .into(avatarView);
+            Toast.makeText(this, "Аватар сохранен на устройстве", Toast.LENGTH_SHORT).show();
+        } catch (IOException e) {
+            Toast.makeText(this, "Не удалось сохранить аватар", Toast.LENGTH_SHORT).show();
+        }
+    }
+    private void togglePasswordSection(Dialog dialog) {
+        View passwordFields = dialog.findViewById(R.id.password_fields_container);
+        View loginSection = dialog.findViewById(R.id.login_section_container);
+
+        if (passwordFields == null) return;
+
+        // 🔒 ВСЕГДА закрываем логин
+        if (loginSection != null && loginSection.getVisibility() == View.VISIBLE) {
+            loginSection.setVisibility(View.GONE);
+            loginSection.setAlpha(1f);
+        }
+
+        if (passwordFields.getVisibility() == View.VISIBLE) {
+            passwordFields.animate()
+                    .alpha(0f)
+                    .setDuration(150)
+                    .withEndAction(() -> {
+                        passwordFields.setVisibility(View.GONE);
+                        passwordFields.setAlpha(1f);
+                    })
+                    .start();
+        } else {
+            passwordFields.setAlpha(0f);
+            passwordFields.setVisibility(View.VISIBLE);
+            passwordFields.animate()
+                    .alpha(1f)
+                    .setDuration(200)
+                    .start();
+        }
+    }
+
+
+    private void toggleLoginSection(Dialog dialog) {
+        View loginSection = dialog.findViewById(R.id.login_section_container);
+        View passwordFields = dialog.findViewById(R.id.password_fields_container);
+
+        if (loginSection == null) return;
+
+        // 🔒 ВСЕГДА закрываем пароль
+        if (passwordFields != null && passwordFields.getVisibility() == View.VISIBLE) {
+            passwordFields.setVisibility(View.GONE);
+            passwordFields.setAlpha(1f);
+        }
+
+        if (loginSection.getVisibility() == View.VISIBLE) {
+            loginSection.animate()
+                    .alpha(0f)
+                    .setDuration(150)
+                    .withEndAction(() -> {
+                        loginSection.setVisibility(View.GONE);
+                        loginSection.setAlpha(1f);
+                    })
+                    .start();
+        } else {
+            loginSection.setAlpha(0f);
+            loginSection.setVisibility(View.VISIBLE);
+            loginSection.animate()
+                    .alpha(1f)
+                    .setDuration(200)
+                    .start();
+        }
+    }
+
 }
