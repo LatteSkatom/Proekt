@@ -38,6 +38,7 @@ public class AnalitikActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ActivityTransitionUtils.setupWindowFadeTransition(this);
         setContentView(R.layout.analitika);
 
         subCountTv = findViewById(R.id.subCount);

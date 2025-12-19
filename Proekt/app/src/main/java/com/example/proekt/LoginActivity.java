@@ -27,6 +27,7 @@ public class LoginActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ActivityTransitionUtils.setupWindowFadeTransition(this);
         setContentView(R.layout.activity_login);
 
         authManager = new AuthManager(this);

@@ -21,6 +21,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityOptionsCompat;
 import androidx.core.content.ContextCompat;
 
 import com.bumptech.glide.Glide;
@@ -85,6 +86,7 @@ public class Seting_activity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ActivityTransitionUtils.setupWindowFadeTransition(this);
         setContentView(R.layout.setings);
 
         sessionManager = SessionManager.getInstance(this);
@@ -143,8 +145,8 @@ public class Seting_activity extends AppCompatActivity {
 
     private void handleAuthAction() {
         if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
-            loginLauncher.launch(new Intent(this, LoginActivity.class));
-            overridePendingTransition(R.anim.fade_scale_in, R.anim.fade_scale_out);
+            ActivityOptionsCompat options = ActivityOptionsCompat.makeSceneTransitionAnimation(this);
+            loginLauncher.launch(new Intent(this, LoginActivity.class), options);
         } else {
             sessionManager.signOutToGuest();
             Toast.makeText(this, "Вы вышли", Toast.LENGTH_SHORT).show();

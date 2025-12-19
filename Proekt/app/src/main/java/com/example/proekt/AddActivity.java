@@ -29,6 +29,7 @@ public class AddActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ActivityTransitionUtils.setupWindowFadeTransition(this);
         setContentView(R.layout.add_sub);
 
         sessionManager = SessionManager.getInstance(this);
