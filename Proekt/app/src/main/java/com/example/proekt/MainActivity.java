@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.MenuItem;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
@@ -18,6 +19,7 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -29,6 +31,8 @@ import com.google.firebase.firestore.Query;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
@@ -46,6 +50,7 @@ public class MainActivity extends AppCompatActivity {
     private final List<FirebaseSubscription> subscriptionList = new ArrayList<>();
     private final List<String> subscriptionIds = new ArrayList<>();
     private ListenerRegistration subscriptionRegistration;
+    private SortMode currentSortMode = SortMode.CREATED_DESC;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,6 +74,8 @@ public class MainActivity extends AppCompatActivity {
         analitikButton.setOnClickListener(v -> {
             startActivity(new Intent(this, AnalitikActivity.class));
         });
+
+        findViewById(R.id.sort_button).setOnClickListener(v -> showSortMenu());
     }
 
     @Override
@@ -129,6 +136,7 @@ public class MainActivity extends AppCompatActivity {
                     sessionManager.replaceLocalSubscriptions(cloudSubscriptions);
                     loadCachedCloudSubscriptions();
                     mergePendingSubscriptions();
+                    applySort();
                     adapter.notifyDataSetChanged();
                     scheduleNotifications(subscriptionList);
                 });
@@ -337,6 +345,7 @@ public class MainActivity extends AppCompatActivity {
                 subscriptionIds.add(sub.id);
             }
         }
+        applySort();
         adapter.notifyDataSetChanged();
         scheduleNotifications(subscriptionList);
     }
@@ -350,6 +359,7 @@ public class MainActivity extends AppCompatActivity {
                 subscriptionIds.add(sub.id);
             }
         }
+        applySort();
         adapter.notifyDataSetChanged();
         scheduleNotifications(subscriptionList);
     }
@@ -363,6 +373,7 @@ public class MainActivity extends AppCompatActivity {
                 subscriptionIds.add(sub.id);
             }
         }
+        applySort();
     }
 
     private void mergePendingSubscriptions() {
@@ -381,6 +392,85 @@ public class MainActivity extends AppCompatActivity {
                 subscriptionList.add(0, pendingSub);
             }
         }
+    }
+
+    private void showSortMenu() {
+        PopupMenu popupMenu = new PopupMenu(this, findViewById(R.id.sort_button));
+        popupMenu.getMenuInflater().inflate(R.menu.sort_menu, popupMenu.getMenu());
+        popupMenu.setOnMenuItemClickListener(this::onSortMenuItemSelected);
+        popupMenu.show();
+    }
+
+    private boolean onSortMenuItemSelected(MenuItem item) {
+        int itemId = item.getItemId();
+        if (itemId == R.id.sort_created) {
+            currentSortMode = SortMode.CREATED_DESC;
+        } else if (itemId == R.id.sort_name) {
+            currentSortMode = SortMode.NAME_ASC;
+        } else if (itemId == R.id.sort_cost) {
+            currentSortMode = SortMode.COST_ASC;
+        } else if (itemId == R.id.sort_next_payment) {
+            currentSortMode = SortMode.NEXT_PAYMENT_ASC;
+        } else {
+            return false;
+        }
+        applySort();
+        adapter.notifyDataSetChanged();
+        return true;
+    }
+
+    private void applySort() {
+        Comparator<FirebaseSubscription> comparator;
+        switch (currentSortMode) {
+            case NAME_ASC:
+                comparator = Comparator.comparing(sub -> safeLowercase(sub.serviceName));
+                break;
+            case COST_ASC:
+                comparator = Comparator.comparingDouble(sub -> sub.cost);
+                break;
+            case NEXT_PAYMENT_ASC:
+                comparator = Comparator.comparingLong(this::parsePaymentDate);
+                break;
+            case CREATED_DESC:
+            default:
+                comparator = (a, b) -> compareCreatedAtDesc(a, b);
+                break;
+        }
+        Collections.sort(subscriptionList, comparator);
+    }
+
+    private int compareCreatedAtDesc(FirebaseSubscription a, FirebaseSubscription b) {
+        if (a == null && b == null) return 0;
+        if (a == null) return 1;
+        if (b == null) return -1;
+        if (a.createdAt == null && b.createdAt == null) return 0;
+        if (a.createdAt == null) return 1;
+        if (b.createdAt == null) return -1;
+        return b.createdAt.compareTo(a.createdAt);
+    }
+
+    private long parsePaymentDate(FirebaseSubscription subscription) {
+        if (subscription == null || subscription.nextPaymentDate == null) return Long.MAX_VALUE;
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+            Date date = sdf.parse(subscription.nextPaymentDate);
+            if (date == null) return Long.MAX_VALUE;
+            return date.getTime();
+        } catch (Exception ex) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private String safeLowercase(String value) {
+        if (value == null) return "";
+        return value.toLowerCase(Locale.getDefault());
+    }
+
+    private enum SortMode {
+        CREATED_DESC,
+        NAME_ASC,
+        COST_ASC,
+        NEXT_PAYMENT_ASC
     }
 
     private boolean sameSubscription(FirebaseSubscription a, FirebaseSubscription b) {
