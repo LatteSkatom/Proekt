@@ -3,7 +3,9 @@ package com.example.proekt;
 import android.content.Intent;
 import android.app.DatePickerDialog;
 import android.os.Bundle;
+import android.text.InputFilter;
 import android.text.TextUtils;
+import android.text.method.DigitsKeyListener;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.Toast;
@@ -20,6 +22,7 @@ import java.util.Locale;
 
 public class AddActivity extends AppCompatActivity {
 
+    private static final double MAX_COST = 1_000_000;
     private SessionManager sessionManager;
 
     @Override
@@ -33,6 +36,25 @@ public class AddActivity extends AppCompatActivity {
         EditText costField = findViewById(R.id.editCost);
         EditText nextPaymentField = findViewById(R.id.editDate);
         View saveButton = findViewById(R.id.save_button);
+
+        costField.setKeyListener(DigitsKeyListener.getInstance("0123456789.,"));
+        costField.setFilters(new InputFilter[]{(source, start, end, dest, dstart, dend) -> {
+            String nextValue = dest.subSequence(0, dstart).toString()
+                    + source.subSequence(start, end)
+                    + dest.subSequence(dend, dest.length());
+            if (nextValue.isEmpty() || ".".equals(nextValue) || ",".equals(nextValue)) {
+                return null;
+            }
+            try {
+                double parsed = Double.parseDouble(nextValue.replace(",", "."));
+                if (parsed > MAX_COST) {
+                    return "";
+                }
+                return null;
+            } catch (NumberFormatException ex) {
+                return "";
+            }
+        }});
 
         nextPaymentField.setFocusable(false);
         nextPaymentField.setClickable(true);
@@ -73,6 +95,10 @@ public class AddActivity extends AppCompatActivity {
                 cost = Double.parseDouble(costText.replace(",", "."));
             } catch (NumberFormatException ex) {
                 Toast.makeText(this, "Некорректная цена", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (cost > MAX_COST) {
+                Toast.makeText(this, "Цена не может быть больше 1 000 000", Toast.LENGTH_SHORT).show();
                 return;
             }
 
