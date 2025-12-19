@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/sort_created_desc"
+        android:title="Сначала новые" />
+    <item
+        android:id="@+id/sort_name_asc"
+        android:title="По названию (А-Я)" />
+    <item
+        android:id="@+id/sort_name_desc"
+        android:title="По названию (Я-А)" />
+    <item
+        android:id="@+id/sort_cost_asc"
+        android:title="По цене (по возрастанию)" />
+    <item
+        android:id="@+id/sort_cost_desc"
+        android:title="По цене (по убыванию)" />
+    <item
+        android:id="@+id/sort_date_asc"
+        android:title="По дате платежа (раньше)" />
+    <item
+        android:id="@+id/sort_date_desc"
+        android:title="По дате платежа (позже)" />
+</menu>
