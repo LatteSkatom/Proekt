@@ -287,8 +287,15 @@ public class MainActivity extends AppCompatActivity {
                 Calendar calendar = Calendar.getInstance();
                 calendar.setTime(date);
                 calendar.add(Calendar.DAY_OF_MONTH, -1);
+                calendar.set(Calendar.HOUR_OF_DAY, 9);
+                calendar.set(Calendar.MINUTE, 0);
+                calendar.set(Calendar.SECOND, 0);
+                calendar.set(Calendar.MILLISECOND, 0);
                 long triggerTime = calendar.getTimeInMillis();
-                if (triggerTime <= System.currentTimeMillis()) continue;
+                long now = System.currentTimeMillis();
+                if (triggerTime <= now) {
+                    triggerTime = now + 60_000L;
+                }
                 Intent intent = buildNotificationIntent(sub);
                 int requestCode = getRequestCode(sub);
                 PendingIntent pendingIntent = PendingIntent.getBroadcast(
@@ -301,8 +308,12 @@ public class MainActivity extends AppCompatActivity {
                 if (alarmManager != null) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         if (alarmManager.canScheduleExactAlarms()) {
-                            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent);
+                            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent);
+                        } else {
+                            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent);
                         }
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent);
                     } else {
                         alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent);
                     }
