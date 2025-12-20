@@ -171,10 +171,7 @@ public class Seting_activity extends AppCompatActivity {
         }
     }
 
-    @Override
-    public void onBackPressed() {
-        ActivityTransitionUtils.finishWithFadeBack(this);
-    }
+
 
     private void loadProfile(String uid) {
         firestore.collection("users")

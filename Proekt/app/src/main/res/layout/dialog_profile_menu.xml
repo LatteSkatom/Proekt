@@ -194,12 +194,6 @@
             android:layout_marginTop="12dp"
             app:srcCompat="@drawable/save_but" />
 
-        <com.google.android.material.imageview.ShapeableImageView
-            android:id="@+id/close_menu_button"
-            android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:layout_marginTop="12dp"
-            app:srcCompat="@drawable/cancel_but_big" />
 
 
 
