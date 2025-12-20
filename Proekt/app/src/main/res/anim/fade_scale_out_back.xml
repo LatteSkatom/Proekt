@@ -2,11 +2,11 @@
 <set xmlns:android="http://schemas.android.com/apk/res/android"
     android:interpolator="@android:anim/accelerate_interpolator">
     <alpha
-        android:duration="300"
+        android:duration="150"
         android:fromAlpha="1.0"
         android:toAlpha="0.0" />
     <scale
-        android:duration="300"
+        android:duration="150"
         android:fromXScale="1.0"
         android:fromYScale="1.0"
         android:pivotX="50%"
@@ -14,4 +14,3 @@
         android:toXScale="0.95"
         android:toYScale="0.95" />
 </set>
-

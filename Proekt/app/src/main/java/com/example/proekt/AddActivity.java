@@ -13,6 +13,7 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.proekt.utils.ActivityTransitionUtils;
 import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseUser;
 
@@ -28,6 +29,7 @@ public class AddActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ActivityTransitionUtils.setupWindowFadeTransition(this);
         setContentView(R.layout.add_sub);
 
         sessionManager = SessionManager.getInstance(this);
@@ -61,21 +63,28 @@ public class AddActivity extends AppCompatActivity {
         nextPaymentField.setOnClickListener(v -> showDatePicker(nextPaymentField));
 
         findViewById(R.id.sub_button).setOnClickListener(v -> {
-            startActivity(new Intent(AddActivity.this, MainActivity.class));
-            finish();
+            ActivityTransitionUtils.startActivityWithFadeAndFinish(
+                    AddActivity.this,
+                    new Intent(AddActivity.this, MainActivity.class)
+            );
         });
 
         View analyticsButton = findViewById(R.id.Analit_button);
         if (analyticsButton != null) {
             analyticsButton.setOnClickListener(v -> {
-                startActivity(new Intent(AddActivity.this, AnalitikActivity.class));
-                finish();
+                ActivityTransitionUtils.startActivityWithFadeAndFinish(
+                        AddActivity.this,
+                        new Intent(AddActivity.this, AnalitikActivity.class)
+                );
             });
         }
 
         View settingsButton = findViewById(R.id.settingsbutt);
         if (settingsButton != null) {
-            settingsButton.setOnClickListener(v -> startActivity(new Intent(AddActivity.this, Seting_activity.class)));
+            settingsButton.setOnClickListener(v -> ActivityTransitionUtils.startActivityWithFade(
+                    AddActivity.this,
+                    new Intent(AddActivity.this, Seting_activity.class)
+            ));
         }
 
         saveButton.setOnClickListener(v -> {
@@ -129,8 +138,10 @@ public class AddActivity extends AppCompatActivity {
 
     private void completeAndReturn() {
         setResult(RESULT_OK, new Intent());
-        startActivity(new Intent(AddActivity.this, MainActivity.class));
-        finish();
+        ActivityTransitionUtils.startActivityWithFadeAndFinish(
+                AddActivity.this,
+                new Intent(AddActivity.this, MainActivity.class)
+        );
     }
 
     private void showDatePicker(EditText target) {
@@ -149,5 +160,10 @@ public class AddActivity extends AppCompatActivity {
                 calendar.get(Calendar.DAY_OF_MONTH)
         );
         dialog.show();
+    }
+
+    @Override
+    public void onBackPressed() {
+        ActivityTransitionUtils.finishWithFadeBack(this);
     }
 }

@@ -7,6 +7,8 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.proekt.utils.ActivityTransitionUtils;
+
 public class RegisterActivity extends AppCompatActivity {
 
     private AuthManager authManager;
@@ -14,6 +16,7 @@ public class RegisterActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ActivityTransitionUtils.setupWindowFadeTransition(this);
         setContentView(R.layout.activity_register);
 
         authManager = new AuthManager(this);
@@ -45,5 +48,10 @@ public class RegisterActivity extends AppCompatActivity {
         public void onError(String message) {
             Toast.makeText(RegisterActivity.this, message, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    @Override
+    public void onBackPressed() {
+        ActivityTransitionUtils.finishWithFadeBack(this);
     }
 }

@@ -25,6 +25,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.proekt.utils.ActivityTransitionUtils;
 import com.google.android.material.imageview.ShapeableImageView;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
@@ -75,6 +76,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ActivityTransitionUtils.setupWindowFadeTransition(this);
         setContentView(R.layout.activity_main);
 
         sessionManager = SessionManager.getInstance(this);
@@ -85,14 +87,21 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setAdapter(adapter);
 
         Button addButton = findViewById(R.id.add_button);
-        addButton.setOnClickListener(v -> startActivityForResult(new Intent(this, AddActivity.class), ADD_REQUEST));
+        addButton.setOnClickListener(v -> ActivityTransitionUtils.startActivityForResultWithFade(
+                this,
+                new Intent(this, AddActivity.class),
+                ADD_REQUEST
+        ));
 
         ShapeableImageView settingsButton = findViewById(R.id.settingsbutt);
-        settingsButton.setOnClickListener(v -> startActivity(new Intent(this, Seting_activity.class)));
+        settingsButton.setOnClickListener(v -> ActivityTransitionUtils.startActivityWithFade(
+                this,
+                new Intent(this, Seting_activity.class)
+        ));
 
         Button analitikButton = findViewById(R.id.Analit_button);
         analitikButton.setOnClickListener(v -> {
-            startActivity(new Intent(this, AnalitikActivity.class));
+            ActivityTransitionUtils.startActivityWithFade(this, new Intent(this, AnalitikActivity.class));
         });
 
         ImageButton sortButton = findViewById(R.id.sort_button);

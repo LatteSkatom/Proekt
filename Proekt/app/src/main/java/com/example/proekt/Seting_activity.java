@@ -21,10 +21,12 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityOptionsCompat;
 import androidx.core.content.ContextCompat;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.signature.ObjectKey;
+import com.example.proekt.utils.ActivityTransitionUtils;
 import com.google.android.material.imageview.ShapeableImageView;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
@@ -84,6 +86,7 @@ public class Seting_activity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ActivityTransitionUtils.setupWindowFadeTransition(this);
         setContentView(R.layout.setings);
 
         sessionManager = SessionManager.getInstance(this);
@@ -124,16 +127,26 @@ public class Seting_activity extends AppCompatActivity {
             showProfileMenuDialog();
         });
 
-        addButton.setOnClickListener(v -> startActivity(new Intent(this, AddActivity.class)));
-        subButton.setOnClickListener(v -> startActivity(new Intent(this, MainActivity.class)));
-        analyticsButton.setOnClickListener(v -> startActivity(new Intent(this, AnalitikActivity.class)));
+        addButton.setOnClickListener(v -> ActivityTransitionUtils.startActivityWithFadeAndFinish(
+                this,
+                new Intent(this, AddActivity.class)
+        ));
+        subButton.setOnClickListener(v -> ActivityTransitionUtils.startActivityWithFadeAndFinish(
+                this,
+                new Intent(this, MainActivity.class)
+        ));
+        analyticsButton.setOnClickListener(v -> ActivityTransitionUtils.startActivityWithFadeAndFinish(
+                this,
+                new Intent(this, AnalitikActivity.class)
+        ));
 
         updateUi();
     }
 
     private void handleAuthAction() {
         if (sessionManager.getMode() == SessionManager.Mode.GUEST) {
-            loginLauncher.launch(new Intent(this, LoginActivity.class));
+            ActivityOptionsCompat options = ActivityOptionsCompat.makeSceneTransitionAnimation(this);
+            loginLauncher.launch(new Intent(this, LoginActivity.class), options);
         } else {
             sessionManager.signOutToGuest();
             Toast.makeText(this, "Вы вышли", Toast.LENGTH_SHORT).show();
@@ -156,6 +169,11 @@ public class Seting_activity extends AppCompatActivity {
             }
 
         }
+    }
+
+    @Override
+    public void onBackPressed() {
+        ActivityTransitionUtils.finishWithFadeBack(this);
     }
 
     private void loadProfile(String uid) {
